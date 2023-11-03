@@ -4,8 +4,8 @@ import pandas as pd
 import pymongo
 from dotenv import load_dotenv
 import re
-from config import Config
-from logs_config import setup_logging
+from Config.config import Config
+from Config.logs_config import setup_logging
 # Load environment variables from .env file
 load_dotenv()
 

@@ -10,8 +10,8 @@ from selenium.common.exceptions import NoSuchElementException
 from database import insert_manga_to_db, detect_duplicates, remove_doujinshi
 from tqdm import tqdm  # Import tqdm for the progress bar
 import random
-from config import Config
-from logs_config import setup_logging
+from Config.config import Config
+from Config.logs_config import setup_logging
 
 
 # Set up logging to a file

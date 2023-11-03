@@ -13,10 +13,10 @@ import requests
 from database import find_mangas
 import re
 import json
-from config import Config
+from Config.config import Config
 import base64
 import hashlib
-from logs_config import setup_logging
+from Config.logs_config import setup_logging
 # Load environment variables from .env file
 load_dotenv()
 
