@@ -5,31 +5,29 @@ import pymongo
 from dotenv import load_dotenv
 import logging
 import re
+from config import Config
 # Load environment variables from .env file
 load_dotenv()
-class Config:
-    # Get the MongoDB connection string from the environment variable
-    CONNECTION_STRING = os.environ.get("MONGODB_CONNECTION_STRING")
-    SYMBOLS_CSV_FILE = os.environ.get("SYMBOLS_CSV_FILE")
-    
+
+# Set up logging to a file
 logging.basicConfig(filename='./Logs/Database.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def connect_db(database_name, collection_name):
     try:
-        client = pymongo.MongoClient(Config.CONNECTION_STRING)
-        db = client[database_name]
-        collection = db[collection_name]
+        client = pymongo.MongoClient(Config.CONNECTION_STRING) # Connect to MongoDB
+        db = client[database_name] # Connect to the "Manga" database
+        collection = db[collection_name] # Connect to the "Collection" collection
         return collection
     except pymongo.errors.ConnectionFailure as e:
         logging.error(f"Error connecting to MongoDB: {e}")
         raise  # Re-raise the exception to stop further execution
 
 def connect_collection_db():
-    return connect_db("Manga", "Collection")
+    return connect_db("Manga", "Collection") # Connect to the "Manga" database and "Collection" collection
 
 def create_index(collection):
     # Create an index on the 'title' field
-    collection.create_index([('title', pymongo.ASCENDING)])
+    collection.create_index([('title', pymongo.ASCENDING)]) # Create an index on the 'title' field
 
 
 def insert_to_db(collection, data):
@@ -84,14 +82,14 @@ def detect_duplicates():
     
     # Iterate over the duplicate documents and remove extra occurrences
     for duplicate_group in duplicates_cursor:
-        extra_occurrences = duplicate_group['ids'][1:]
-        collection.delete_many({'_id': {'$in': extra_occurrences}})
+        extra_occurrences = duplicate_group['ids'][1:] # Get the extra occurrences
+        collection.delete_many({'_id': {'$in': extra_occurrences}}) # Delete the extra occurrences
     
     print('duplicates removed')
     
 def fetch_mangas():
-    collection = connect_collection_db()
-    mangas = collection.find({}, {'_id': 0, 'title': 1, 'link': 1, 'status': 1, 'desc': 1})
+    collection = connect_collection_db() # Connect to the "Manga" database and "Collection" collection
+    mangas = collection.find({}, {'_id': 0, 'title': 1, 'link': 1, 'status': 1, 'desc': 1}) # Find all the documents in the collection
     return mangas
 
 def find_mangas(input):
@@ -99,9 +97,10 @@ def find_mangas(input):
         # Create a regex pattern for matching substrings of the input
         pattern = re.compile(f".*{re.escape(input)}.*", re.IGNORECASE)
         
+        # Connect to the "Manga" database and "Collection" collection
         collection = connect_collection_db()
         
-        # Use the regex pattern in the query
+        # Use the regex pattern in the query to find matching documents and return only the title, link, status and desc fields
         mangas_cursor = collection.find(
             {'title': {'$regex': pattern}},
             {'_id': 0, 'title': 1, 'link': 1, 'status': 1, 'desc': 1}
@@ -110,7 +109,7 @@ def find_mangas(input):
         # Convert the cursor to a list
         mangas = list(mangas_cursor)
         
-        return mangas
+        return mangas # Return the list of matching documents
     except Exception as e:
         print(f"Error in find_mangas: {e}")
         return None
@@ -118,10 +117,14 @@ def find_mangas(input):
 
 
 def remove_doujinshi():
+    # Doujinshi is a genre of manga that is fan-made and not officially published 
+    # We WILL NOT be downloading doujinshis 
+     
     try:
+        # Connect to the "Manga" database and "Collection" collection
         collection = connect_collection_db()
 
-        # Find all titles including "doujinshi" in the genre field
+        # Find all titles including "doujinshi" 
         doujinshi_entries = collection.find(
             {'title': re.compile(r'doujinshi', re.IGNORECASE)},
             {'_id': 0, 'title': 1}
