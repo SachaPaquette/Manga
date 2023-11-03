@@ -28,6 +28,7 @@ class WebInteractions:
         self.driver = self.setup_driver()
         self.original_tab_handle = None
         self.last_loaded_img_src = None
+
     def setup_driver(self, headless=True):
         # Set up and return the WebDriver instance
         options = webdriver.ChromeOptions()
@@ -115,7 +116,7 @@ class WebInteractions:
         except Exception as e:
             logging.error(f"Error waiting for page to load: {e}")
             raise
-        
+
     def wait_until_image_loaded(self):
         max_retries = 3
         retries = 0
@@ -128,7 +129,8 @@ class WebInteractions:
                 current_img_src = img_element.get_attribute(Config.SRC)
 
                 if current_img_src == self.last_loaded_img_src:
-                    raise StaleElementReferenceException("Img source did not change from last time")
+                    raise StaleElementReferenceException(
+                        "Img source did not change from last time")
 
                 self.last_loaded_img_src = current_img_src
                 return  # Break out of the loop if successful
@@ -139,13 +141,14 @@ class WebInteractions:
                 self.driver.refresh()
 
             except TimeoutException as timeout_exception:
-                logging.error(f"Timeout waiting for image to load: {timeout_exception}")
+                logging.error(
+                    f"Timeout waiting for image to load: {timeout_exception}")
 
             retries += 1
 
         # If the loop completes without a successful attempt, raise an exception
-        raise StaleElementReferenceException("Max retries reached, unable to load image")
-
+        raise StaleElementReferenceException(
+            "Max retries reached, unable to load image")
 
     def dismiss_popup_if_present(self):
         try:
@@ -166,7 +169,7 @@ class WebInteractions:
 
     def check_element_exists(self, max_retries=3):
         try:
-            print("Checking if element exists...")
+
             retries = 0
 
             while retries < max_retries:
@@ -179,15 +182,15 @@ class WebInteractions:
                         By.CLASS_NAME, Config.MANGA_IMAGE)
 
                     if manga_image:
-                        print("Manga image found")
+
                         return Config.MANGA_IMAGE
 
                     # Check if the long manga image is present
                     long_manga_image = self.driver.find_elements(
                         By.CLASS_NAME, Config.LONG_MANGA_IMAGE)
-                    
+
                     if long_manga_image:
-                        print("Long manga image found")
+
                         return Config.LONG_MANGA_IMAGE
 
                     retries += 1
@@ -218,9 +221,6 @@ class WebInteractions:
             logging.error(f"Error resetting driver: {e}")
 
 
-
-
-
 class FileOperations:
     failed_images = []  # Array to store the images that failed to save
 
@@ -229,6 +229,7 @@ class FileOperations:
         self.original_tab_handles = None
         self.last_processed_url = None
         self.unique_base64_data = set()
+
     def sanitize_folder_name(self, folder_name):
         # Replace characters not allowed in a folder name with a space
         sanitized_name = re.sub(r'[<>:"/\\|?*]', ' ', folder_name)
@@ -288,10 +289,10 @@ class FileOperations:
             # array for the images that failed to save
             # failed_to_save = []
             print(f"Found {len(img_data_list)} image data URLs")
-            
+
             # Maximum number of pages to save before resetting the driver (to avoid memory issues)
             MAX_PAGES_BEFORE_RESET = 20
-            
+
             for i, img_data in enumerate(img_data_list):
                 try:
                     # Check if it's time to reset the driver
@@ -329,13 +330,14 @@ class FileOperations:
                 # Wait for the page to load
                 driver.get(img_data)
                 time.sleep(4)
-                
+
                 # Handle stale element reference exception
                 try:
                     WebDriverWait(driver, 10).until(
                         EC.presence_of_element_located((By.TAG_NAME, Config.IMG)))
                 except StaleElementReferenceException:
-                    logging.warning("Stale element reference. Refreshing the page.")
+                    logging.warning(
+                        "Stale element reference. Refreshing the page.")
                     driver.refresh()
                     WebDriverWait(driver, 10).until(
                         EC.presence_of_element_located((By.TAG_NAME, Config.IMG)))
@@ -360,13 +362,13 @@ class FileOperations:
             logging.error(f"Error saving image: {e}")
             raise
 
-
         except NoSuchWindowException:
             # Handle the "no such window" exception
             logging.error(f"Window closed for sub-div {index + 1}")
         except Exception as e:
             logging.error(f"Error saving image: {e}")
             raise
+
     def save_image_in_tab(self, driver, folder_path, file_name, index):
         try:
             # Locate the img element dynamically
@@ -383,13 +385,14 @@ class FileOperations:
             logging.info(f"Screenshot for page {index} saved")
 
         except StaleElementReferenceException:
-            logging.error(f"Stale element reference while saving image for page {index}")
+            logging.error(
+                f"Stale element reference while saving image for page {index}")
         except TimeoutException:
-            logging.error(f"Timeout waiting for image element for page {index}")
+            logging.error(
+                f"Timeout waiting for image element for page {index}")
         except Exception as e:
             logging.error(f"Error saving image: {e}")
             raise
-
 
     def retry_unsaved_images(self, driver):
         for failed_image in self.failed_images:
@@ -444,8 +447,6 @@ class FileOperations:
                 f"Error executing JavaScript or taking screenshot - {e}")
         except Exception as e:
             logging.error(f"Unexpected error: {e}")
-
-
 
     def delete_last_page(self, save_path, series_name, chapter_number, page_number):
         _, screenshot_filepath = self.create_chapter_folder(
@@ -610,9 +611,6 @@ class MangaDownloader:
                     f"Folder for {chapter_number} already exists. Exiting.")
                 return
             else:
-                # make headless false to see the browser
-                # self.driver = self.setup_driver(False)
-                # self.driver.maximize_window()
                 # Navigate to the chapter link
                 self.web_interactions.driver.get(chapter_link)
                 time.sleep(3)  # Wait for the page to load
@@ -664,10 +662,8 @@ class MangaDownloader:
         self.web_interactions.wait_until_page_loaded()
         before_url = self.web_interactions.driver.current_url
 
-        print("trying to save check")
         # Check if it's a long manga
         config = self.web_interactions.check_element_exists()
-        print("worked")
 
         if config == Config.MANGA_IMAGE:
             # Save a screenshot of the page
