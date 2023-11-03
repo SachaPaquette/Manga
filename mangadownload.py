@@ -1,5 +1,5 @@
+# Description: This script downloads manga from mangadex.org and saves it to the local disk.
 import os
-import logging
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -10,24 +10,25 @@ from selenium.common.exceptions import ElementClickInterceptedException, NoSuchE
 from dotenv import load_dotenv
 import time
 import requests
-from database import insert_manga_to_db, detect_duplicates, fetch_mangas, find_mangas
+from database import find_mangas
 import re
 import json
 from config import Config
 import base64
 import hashlib
+from logs_config import setup_logging
 # Load environment variables from .env file
 load_dotenv()
 
-logging.basicConfig(filename='./Logs/MangaDownload.log', level=logging.INFO,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+# Set up logging to a file
+logger = setup_logging('manga_download', Config.MANGA_DOWNLOAD_LOG_PATH)
 
 
 class WebInteractions:
     def __init__(self):
-        self.driver = self.setup_driver()
-        self.original_tab_handle = None
-        self.last_loaded_img_src = None
+        self.driver = self.setup_driver()  # Initialize the WebDriver instance
+        self.original_tab_handle = None  # Store the original tab handle
+        self.last_loaded_img_src = None  # Store the last loaded image source
 
     def setup_driver(self, headless=True):
         # Set up and return the WebDriver instance
@@ -76,11 +77,11 @@ class WebInteractions:
                 return False
 
         except ElementClickInterceptedException as e:
-            logging.error(f"Element click intercepted: {e}")
+            logger.error(f"Element click intercepted: {e}")
             return False
 
         except Exception as e:
-            logging.error(f"Error clicking next page button: {e}")
+            logger.error(f"Error clicking next page button: {e}")
             return False
 
     def wait_for_next_page(self):
@@ -101,10 +102,10 @@ class WebInteractions:
                     (By.CLASS_NAME, Config.CHAPTER_CARDS))
             )
         except NoSuchElementException as e:
-            logging.error(f"Error while waiting for chapter cards: {e}")
+            logger.error(f"No such element exception for chapter cards: {e}")
             raise
         except Exception as e:
-            logging.error(f"Error while waiting for chapter cards: {e}")
+            logger.error(f"Error while waiting for chapter cards: {e}")
             raise
 
     def wait_until_page_loaded(self):
@@ -114,7 +115,7 @@ class WebInteractions:
                     (By.CLASS_NAME, Config.PAGE_WRAP))
             )
         except Exception as e:
-            logging.error(f"Error waiting for page to load: {e}")
+            logger.error(f"Error waiting for page to load: {e}")
             raise
 
     def wait_until_image_loaded(self):
@@ -136,12 +137,12 @@ class WebInteractions:
                 return  # Break out of the loop if successful
 
             except StaleElementReferenceException as stale_exception:
-                logging.error(f"Stale element reference: {stale_exception}")
+                logger.error(f"Stale element reference: {stale_exception}")
                 # Refresh the entire page
                 self.driver.refresh()
 
             except TimeoutException as timeout_exception:
-                logging.error(
+                logger.error(
                     f"Timeout waiting for image to load: {timeout_exception}")
 
             retries += 1
@@ -204,7 +205,7 @@ class WebInteractions:
             return None
 
         except NoSuchElementException as e:
-            logging.error(f"Error while checking if element exists: {e}")
+            logger.error(f"Error while checking if element exists: {e}")
             raise
 
     def reset_driver(self, img_data):
@@ -218,7 +219,7 @@ class WebInteractions:
             # Re-navigate to the chapter page (add your navigation logic here)
             # Example: self.driver.get("https://example.com/chapter")
         except Exception as e:
-            logging.error(f"Error resetting driver: {e}")
+            logger.error(f"Error resetting driver: {e}")
 
 
 class FileOperations:
@@ -266,7 +267,7 @@ class FileOperations:
             if elements:
                 elements[0].screenshot(screenshot_filepath)
         except Exception as e:
-            logging.error(f"Error saving screenshot: {e}")
+            logger.error(f"Error saving screenshot: {e}")
             raise
 
     def save_long_screenshot(self, driver, save_path, series_name, chapter_number, page_number):
@@ -306,7 +307,7 @@ class FileOperations:
                                     folder_path, file_name, index)
 
                 except Exception as img_error:
-                    logging.error(f"Error saving image {index}: {img_error}")
+                    logger.error(f"Error saving image {index}: {img_error}")
                     self.failed_images.append({
                         'index': index,
                         'img_src': sub_divs[i].find_element(By.TAG_NAME, Config.IMG).get_attribute(Config.SRC),
@@ -318,7 +319,7 @@ class FileOperations:
             # reset the unique base64 data set
             self.unique_base64_data = set()
         except Exception as e:
-            logging.error(f"Error saving long screenshot: {e}")
+            logger.error(f"Error saving long screenshot: {e}")
             raise
 
     def save_image(self, driver, img_data, folder_path, file_name, index):
@@ -336,14 +337,14 @@ class FileOperations:
                     WebDriverWait(driver, 10).until(
                         EC.presence_of_element_located((By.TAG_NAME, Config.IMG)))
                 except StaleElementReferenceException:
-                    logging.warning(
+                    logger.warning(
                         "Stale element reference. Refreshing the page.")
                     driver.refresh()
                     WebDriverWait(driver, 10).until(
                         EC.presence_of_element_located((By.TAG_NAME, Config.IMG)))
 
                 if current_url == self.last_processed_url:
-                    logging.warning(
+                    logger.warning(
                         f"Duplicate URL detected, but continuing with sub-div {index + 1}")
 
                 # Update the last processed URL
@@ -352,21 +353,21 @@ class FileOperations:
                 self.save_image_in_tab(driver, folder_path, file_name, index)
 
             else:
-                logging.warning(
+                logger.warning(
                     f"Skipping sub-div {index + 1} - Empty image data")
 
         except NoSuchWindowException:
             # Handle the "no such window" exception
-            logging.error(f"Window closed for sub-div {index + 1}")
+            logger.error(f"Window closed for sub-div {index + 1}")
         except Exception as e:
-            logging.error(f"Error saving image: {e}")
+            logger.error(f"Error saving image: {e}")
             raise
 
         except NoSuchWindowException:
             # Handle the "no such window" exception
-            logging.error(f"Window closed for sub-div {index + 1}")
+            logger.error(f"Window closed for sub-div {index + 1}")
         except Exception as e:
-            logging.error(f"Error saving image: {e}")
+            logger.error(f"Error saving image: {e}")
             raise
 
     def save_image_in_tab(self, driver, folder_path, file_name, index):
@@ -382,16 +383,16 @@ class FileOperations:
             file_path = os.path.join(folder_path, file_name)
             img.screenshot(file_path)
 
-            logging.info(f"Screenshot for page {index} saved")
+            logger.info(f"Screenshot for page {index} saved")
 
         except StaleElementReferenceException:
-            logging.error(
+            logger.error(
                 f"Stale element reference while saving image for page {index}")
         except TimeoutException:
-            logging.error(
+            logger.error(
                 f"Timeout waiting for image element for page {index}")
         except Exception as e:
-            logging.error(f"Error saving image: {e}")
+            logger.error(f"Error saving image: {e}")
             raise
 
     def retry_unsaved_images(self, driver):
@@ -407,14 +408,14 @@ class FileOperations:
                 # If the image is saved successfully, remove it from the failed images list
                 self.failed_images.remove(failed_image)
             except Exception as img_error:
-                logging.error(f"Error saving image {index}: {img_error}")
+                logger.error(f"Error saving image {index}: {img_error}")
 
         # If there are still failed images, retry the process for them
         if self.failed_images:
-            logging.warning("Retrying failed images...")
+            logger.warning("Retrying failed images...")
             self.retry_unsaved_images(driver)
         else:
-            logging.info("All images saved successfully.")
+            logger.info("All images saved successfully.")
 
     def get_image_data(self, driver, img_src):
         try:
@@ -443,10 +444,10 @@ class FileOperations:
                 return data_url
 
         except WebDriverException as e:
-            logging.error(
+            logger.error(
                 f"Error executing JavaScript or taking screenshot - {e}")
         except Exception as e:
-            logging.error(f"Unexpected error: {e}")
+            logger.error(f"Unexpected error: {e}")
 
     def delete_last_page(self, save_path, series_name, chapter_number, page_number):
         _, screenshot_filepath = self.create_chapter_folder(
@@ -454,7 +455,7 @@ class FileOperations:
         try:
             os.remove(screenshot_filepath)  # Delete the last page
         except Exception as e:
-            logging.error(f"Error deleting screenshot: {e}")
+            logger.error(f"Error deleting screenshot: {e}")
 
 
 class MangaDownloader:
@@ -466,7 +467,7 @@ class MangaDownloader:
         self.save_path = os.getenv("SAVE_PATH")
 
     def fetch_chapters(self, link):
-        logging.info(f"Fetching chapters for link: {link}")
+        logger.info(f"Fetching chapters for link: {link}")
         self.web_interactions.driver.get(link)  # Navigate to the link
         print("Fetching chapters...")
 
@@ -490,7 +491,7 @@ class MangaDownloader:
                 chapters_array += self.process_chapter_cards(chapter_cards)[0]
 
         except Exception as e:
-            logging.error(f"Error fetching chapters: {e}")
+            logger.error(f"Error fetching chapters: {e}")
             raise
         finally:
             return chapters_array
@@ -512,7 +513,7 @@ class MangaDownloader:
                     if first_chapter_number is None:
                         first_chapter_number = chapter_info['chapter_number']
             except NoSuchElementException as e:
-                logging.error(f"Error while fetching chapter: {e}")
+                logger.error(f"Error while fetching chapter: {e}")
         return chapters_array, first_chapter_number
 
     def unsupported_website(self, link):
@@ -596,7 +597,7 @@ class MangaDownloader:
             page_number = 1  # Initialize the page number
             long_screenshot_taken = False  # Initialize the long screenshot flag
             if chapter_link is None:
-                logging.error("Chapter link is None. Exiting.")
+                logger.error("Chapter link is None. Exiting.")
                 return
 
             # Sanitize the folder name (remove characters not allowed in a folder name)
@@ -607,7 +608,7 @@ class MangaDownloader:
 
             # Check if the folder for the chapter already exists, if so, exit
             if os.path.exists(save_path):
-                logging.warning(
+                logger.warning(
                     f"Folder for {chapter_number} already exists. Exiting.")
                 return
             else:
@@ -624,12 +625,12 @@ class MangaDownloader:
                 while True:
                     try:
                         if previous_chapter_id is None:
-                            logging.error(
+                            logger.error(
                                 "Previous chapter ID is None. Exiting.")
                             return
 
                         if previous_chapter_id != self.extract_chapter_id(self.web_interactions.driver.current_url) and not is_long_manga:
-                            logging.info("Chapter completed.")
+                            logger.info("Chapter completed.")
                             return
 
                         if Config.LONG_MANGA_IMAGE in self.web_interactions.check_element_exists() and not long_screenshot_taken:
@@ -653,7 +654,7 @@ class MangaDownloader:
                             page_number += 1  # Increment the page number for small manga
 
         except Exception as e:
-            logging.critical(f"Critical error: {e}")
+            logger.critical(f"Critical error: {e}")
         finally:
             pass
 
@@ -684,14 +685,14 @@ class MangaDownloader:
 
         # Check if the chapter ID has changed (i.e., the chapter has ended)
         if current_chapter_id != previous_chapter_id:
-            logging.info("Chapter completed.")
+            logger.info("Chapter completed.")
             self.file_operations.delete_last_page(
                 self.save_path, series_name, chapter_number, page_number)
             raise StopIteration
 
         # Check if the URL has changed after pressing the right arrow key
         if self.web_interactions.driver.current_url == before_url:
-            logging.error(
+            logger.error(
                 "URL did not change after pressing the right arrow key. Stopping.")
             # Popup is present on the page
             self.web_interactions.dismiss_popup_if_present()

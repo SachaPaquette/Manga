@@ -1,4 +1,4 @@
-import logging
+# Description: This script fetches manga info from mangadex.org and inserts it into a MongoDB database.
 import re
 import time
 from selenium import webdriver
@@ -11,12 +11,11 @@ from database import insert_manga_to_db, detect_duplicates, remove_doujinshi
 from tqdm import tqdm  # Import tqdm for the progress bar
 import random
 from config import Config
+from logs_config import setup_logging
 
 
-def setup_logging():
-    logging.basicConfig(filename='./Logs/MangaFetch.log', level=logging.INFO,
-                        format='%(asctime)s - %(levelname)s - %(message)s')
-    logging.getLogger(__name__)
+# Set up logging to a file
+logger = setup_logging('manga_fetch', Config.MANGA_FETCH_LOG_PATH)
 
 
 def driver_setup():
@@ -90,10 +89,10 @@ def fetch_and_insert_mangas(driver, page_number):
         insert_manga_to_db(manga_array)
 
     except NoSuchElementException as e:
-        logging.error(f"Error while fetching manga: {e}")
+        logger.error(f"Error while fetching manga: {e}")
         print(f"No manga cards found on page {page_number}.")
     except Exception as e:
-        logging.error(f"An unexpected error occurred: {e}")
+        logger.error(f"An unexpected error occurred: {e}")
         raise
 
 
@@ -131,9 +130,8 @@ def process_manga_pages(driver):
 
 def main():
     try:
-        setup_logging()  # Setup logging
         update_symbols = get_user_confirmation(
-            "Do you want to add manga names to the database? (Y/n): " , default="y")  # Get user confirmation
+            "Do you want to add manga names to the database? (Y/n): ", default="y")  # Get user confirmation
 
         if update_symbols != "n":
             driver = driver_setup()  # Setup the driver
@@ -146,7 +144,7 @@ def main():
         remove_doujinshi()  # Remove doujinshi from the database (fan-made manga)
 
     except Exception as e:
-        logging.error(f"An unexpected error occurred: {e}")
+        logger.error(f"An unexpected error occurred: {e}")
         raise
     except KeyboardInterrupt:
         print("\nKeyboardInterrupt detected. Quitting...")

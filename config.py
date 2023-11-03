@@ -6,8 +6,10 @@ class Config:
     ##############################
     CONNECTION_STRING = os.environ.get("MONGODB_CONNECTION_STRING")
     SYMBOLS_CSV_FILE = os.environ.get("SYMBOLS_CSV_FILE")
+    DATABASE_LOG_PATH ="./Logs/Database.log"
     
-    
+
+
     
     ##############################
     #        mangadownload.py    #
@@ -29,7 +31,7 @@ class Config:
     HYPERLINK = "a" # Tag name of the hyperlink
     MANGA_IMAGE = "mx-auto.h-full.md--page.flex"
     LONG_MANGA_IMAGE = "md--page.ls.limit-width.mx-auto"
-    
+    MANGA_DOWNLOAD_LOG_PATH ="./Logs/MangaDownload.log"
     
     
     
@@ -48,3 +50,4 @@ class Config:
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.48",
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 OPR/77.0.4054.254",
     ] # List of user agents to rotate through
+    MANGA_FETCH_LOG_PATH ="./Logs/MangaFetch.log"
