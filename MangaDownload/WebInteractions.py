@@ -149,7 +149,6 @@ class WebInteractions:
     def dismiss_popup_if_present(self):
         try:
             # Check if the popup is present
-            # Replace 'popup-class-name' with the actual class name
             popup = self.driver.find_element(By.CLASS_NAME, Config.POP_UP)
 
             # Find all buttons in the popup
@@ -202,16 +201,3 @@ class WebInteractions:
         except NoSuchElementException as e:
             logger.error(f"Error while checking if element exists: {e}")
             raise
-
-    def reset_driver(self, img_data):
-        try:
-            # Close the current window
-            self.driver.quit()
-            # Re-initialize the driver and update the class attribute
-            self.driver = self.setup_driver()
-            # Navigate to the image URL
-            self.driver.get(img_data)
-            # Re-navigate to the chapter page (add your navigation logic here)
-            # Example: self.driver.get("https://example.com/chapter")
-        except Exception as e:
-            logger.error(f"Error resetting driver: {e}")
