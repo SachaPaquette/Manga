@@ -69,31 +69,42 @@ class FileOperations:
             return folder_path # Return the folder path
 
 
-    def save_screenshot(self, driver, save_path, series_name, chapter_number, page_number):
-        folder_path, screenshot_filepath = self.create_chapter_folder(
-            save_path, series_name, chapter_number, page_number)
+    def find_manga_image(self, driver):
+        # Find the manga image
+        return driver.find_elements(By.CLASS_NAME, Config.MANGA_IMAGE)
+    def take_screenshot(self, elements, screenshot_filepath):
         try:
-            elements = driver.find_elements(By.CLASS_NAME, Config.MANGA_IMAGE)
-            if elements:
-                elements[0].screenshot(screenshot_filepath)
+            elements[0].screenshot(screenshot_filepath) # Save the screenshot
         except Exception as e:
+            logger.error(f"Error taking screenshot: {e}")
+           
+    def save_screenshot(self, driver, save_path, series_name, chapter_number, page_number):
+        _, screenshot_filepath = self.create_chapter_folder(
+            save_path, series_name, chapter_number, page_number) # Create the folder path and screenshot filepath
+        try:
+            elements = self.find_manga_image(driver) # Find the manga image
+            if elements: # If the manga image is found
+                self.take_screenshot(elements, screenshot_filepath) # Save the screenshot
+        except Exception as e: 
             logger.error(f"Error saving screenshot: {e}")
             raise
 
-
-    def save_long_screenshot(self, driver, save_path, series_name, chapter_number, page_number):
-        try:
-            parent_div = WebDriverWait(driver, 10).until(
+    def find_parent_div(self,driver):
+        return  WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located(
                     (By.CLASS_NAME, Config.LONG_MANGA_PARENT_DIV))
-            )
+            ) # Wait for the parent div to load
+    def find_sub_divs(self, driver):
+        time.sleep(10)
+        return self.find_parent_div(driver).find_elements(By.CLASS_NAME, Config.LONG_MANGA_SUBDIV) # Find all sub-divs
+    def save_long_screenshot(self, driver, save_path, series_name, chapter_number, page_number):
+        try:
+            
             folder_path = self.create_chapter_folder(
-                save_path, series_name, chapter_number, page_number)
+                save_path, series_name, chapter_number, page_number) # Create the folder path
             # higher sleep time to allow the page to load completely
-            time.sleep(10)
-            sub_divs = parent_div.find_elements(
-                By.CLASS_NAME, Config.LONG_MANGA_SUBDIV)
-            print(f"Found {len(sub_divs)} sub-divs")
+            
+            sub_divs = self.find_sub_divs(driver) # Find all sub-divs
 
             # Fetch all image data URLs
             img_data_list = [self.get_image_data(driver, sub_div.find_element(
@@ -219,40 +230,40 @@ class FileOperations:
         else:
             logger.info("All images saved successfully.")
 
-    def fetch_base64_data(driver, img_src):
+    def fetch_base64_data(self, driver, img_src):
         return driver.execute_script(
             f"return fetch('{img_src}').then(response => response.blob()).then(blob => new Promise((resolve, reject) => {{const reader = new FileReader(); reader.onloadend = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(blob);}}))")
 
-    def extract_base64_part(base64_data):
+    def extract_base64_part(self, base64_data):
         return base64_data.split(',')[1]
 
-    def add_padding(base64_data):
+    def add_padding(self, base64_data):
         padding = '=' * (len(base64_data) % 4)
         return base64_data + padding
 
-    def construct_data_url(base64_data):
+    def construct_data_url(self, base64_data):
         return f"data:image/png;base64,{base64_data}"
 
-    def handle_duplicates(data_url, unique_base64_data):
-        if data_url in unique_base64_data:
+    def handle_duplicates(self, data_url):
+        if data_url in self.unique_base64_data:
             print("Duplicate found. Regenerating base64 link...")
             return True
         else:
-            unique_base64_data.add(data_url)
+            self.unique_base64_data.add(data_url)
             return False
 
     def get_image_data(self, driver, img_src):
         try:
             print(f"Fetching image data for {img_src}")
-            base64_data = self.fetch_base64_data(driver, img_src)
-            base64_part = self.extract_base64_part(base64_data)
-            padded_base64_data = self.add_padding(base64_part)
-            data_url = self.construct_data_url(padded_base64_data)
+            base64_data = self.fetch_base64_data(driver, img_src) # Fetch the base64 data
+            base64_part = self.extract_base64_part(base64_data) # Extract the base64 part
+            padded_base64_data = self.add_padding(base64_part) # Add padding to the base64 part
+            data_url = self.construct_data_url(padded_base64_data) # Construct the data URL
 
-            if self.handle_duplicates(data_url, self.unique_base64_data):
-                return self.get_image_data(driver, img_src)
+            if self.handle_duplicates(data_url):
+                return self.get_image_data(driver, img_src) # Regenerate the data URL if it's a duplicate
             else:
-                return data_url
+                return data_url # Return the data URL
 
         except WebDriverException as e:
             logger.error(f"Error executing JavaScript or taking screenshot - {e}")
