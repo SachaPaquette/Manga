@@ -18,6 +18,8 @@ class Config:
     CHAPTER_NUMBER = 'font-bold.self-center.whitespace-nowrap' # Class name of the chapter number
     CHAPTER_LINK = 'chapter-grid.flex-grow'  # Class name of the chapter link
     IMG = 'img'  # Tag name of the image
+    LONG_MANGA_PARENT_DIV = "mx-auto.h-full.w-full" # Class name of the parent div of the long manga image
+    LONG_MANGA_SUBDIV = "md--page.ls.limit-width.mx-auto" # Class name of the subdiv of the long manga image
     # Class name of the page wrap
     PAGE_WRAP = 'min-w-0.relative.pages-wrap.md--reader-pages'
     NEXT_PAGE_BUTTON = "feather-arrow-right"  # Class name of the next page button
@@ -30,6 +32,7 @@ class Config:
     MANGA_IMAGE = "mx-auto.h-full.md--page.flex" # Class name of the manga image
     LONG_MANGA_IMAGE = "md--page.ls.limit-width.mx-auto" # Class name of the long manga image
     MANGA_DOWNLOAD_LOG_PATH = "./Logs/MangaDownload.log" # Path to the log file
+    
 
     ##############################
     #        mangafetch.py       #

@@ -24,40 +24,50 @@ class FileOperations:
     failed_images = []  # Array to store the images that failed to save
 
     def __init__(self, web_interactions, driver):
+        # Initialize the WebInteractions instance
         self.web_interactions = web_interactions
+        # Initialize the WebDriver instance
         self.driver = driver
+        # Store the original tab handle
         self.original_tab_handles = None
+        # Store the last processed URL 
         self.last_processed_url = None
+        # Store the unique base64 data (to avoid duplicates)
         self.unique_base64_data = set()
+        # Store the last loaded image source (to check if the image is loaded)
         self.last_loaded_img_src = None
 
     def sanitize_folder_name(self, folder_name):
         # Replace characters not allowed in a folder name with a space
         sanitized_name = re.sub(r'[<>:"/\\|?*]', ' ', folder_name)
-        # Remove leading and trailing spaces
-        sanitized_name = sanitized_name.strip()
+        sanitized_name = sanitized_name.strip() # Remove leading and trailing spaces
         if not sanitized_name:
-            sanitized_name = "UnknownManga"
+            sanitized_name = "UnknownManga" # Set the folder name to "UnknownManga" if it's empty
         return sanitized_name
 
-    def create_chapter_folder(self, save_path, series_name, chapter_number, page_number=None):
-        # Sanitize the folder name (remove characters not allowed in a folder name)
-        sanitized_folder_name = self.sanitize_folder_name(series_name)
-        folder_path = os.path.join(
-            save_path, sanitized_folder_name, str(chapter_number))
+    def create_folder_path(self, save_path, sanitized_folder_name, chapter_number):
+        return os.path.join(save_path, sanitized_folder_name, str(chapter_number)) # Create the folder path
 
-        if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
-        
-        if page_number is not None:
-            # Create the filename for the screenshot (example: page_1.png)
-            screenshot_filename = f"page_{page_number}.png"
-            # Create the full path for the screenshot (example: C:\Users\user\Documents\Manga\Series Name\1\page_1.png)
-            screenshot_filepath = os.path.join(
-                folder_path, screenshot_filename)
-            return folder_path, screenshot_filepath
+    def create_screenshot_filename(self, page_number):
+        return f"page_{page_number}.png" # Create the screenshot filename
+
+    def create_screenshot_filepath(self, folder_path, screenshot_filename):
+        return os.path.join(folder_path, screenshot_filename) # Create the screenshot filepath
+
+    def create_chapter_folder(self, save_path, series_name, chapter_number, page_number=None):
+        sanitized_folder_name = self.sanitize_folder_name(series_name) # Sanitize the folder name
+        folder_path = self.create_folder_path(save_path, sanitized_folder_name, chapter_number) # Create the folder path
+
+        if not os.path.exists(folder_path): # If the folder doesn't exist
+            os.makedirs(folder_path)   # Create the folder if it doesn't exist
+
+        if page_number is not None: # If the page number is provided
+            screenshot_filename = self.create_screenshot_filename(page_number) # Create the screenshot filename
+            screenshot_filepath = self.create_screenshot_filepath(folder_path, screenshot_filename) # Create the screenshot filepath
+            return folder_path, screenshot_filepath # Return the folder path and screenshot filepath
         else:
-            return folder_path
+            return folder_path # Return the folder path
+
 
     def save_screenshot(self, driver, save_path, series_name, chapter_number, page_number):
         folder_path, screenshot_filepath = self.create_chapter_folder(
@@ -75,22 +85,19 @@ class FileOperations:
         try:
             parent_div = WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located(
-                    (By.CLASS_NAME, 'mx-auto.h-full.w-full'))
+                    (By.CLASS_NAME, Config.LONG_MANGA_PARENT_DIV))
             )
             folder_path = self.create_chapter_folder(
                 save_path, series_name, chapter_number, page_number)
             # higher sleep time to allow the page to load completely
             time.sleep(10)
             sub_divs = parent_div.find_elements(
-                By.CLASS_NAME, 'md--page.ls.limit-width.mx-auto')
+                By.CLASS_NAME, Config.LONG_MANGA_SUBDIV)
             print(f"Found {len(sub_divs)} sub-divs")
 
             # Fetch all image data URLs
             img_data_list = [self.get_image_data(driver, sub_div.find_element(
                 By.TAG_NAME, Config.IMG).get_attribute(Config.SRC)) for sub_div in sub_divs]
-            # array for the images that failed to save
-            # failed_to_save = []
-            print(f"Found {len(img_data_list)} image data URLs")
 
             # Maximum number of pages to save before resetting the driver (to avoid memory issues)
             MAX_PAGES_BEFORE_RESET = 20
@@ -103,9 +110,9 @@ class FileOperations:
                         driver.refresh()
                         time.sleep(5)  # Wait for the page to load after reset
                     index = i + 1
-                    file_name = f"page_{index}.png"
+                    file_name = f"page_{index}.png" # Create the file name
                     self.save_image(driver, img_data,
-                                    folder_path, file_name, index)
+                                    folder_path, file_name, index) # Save the image
 
                 except Exception as img_error:
                     logger.error(f"Error saving image {index}: {img_error}")
@@ -212,35 +219,43 @@ class FileOperations:
         else:
             logger.info("All images saved successfully.")
 
+    def fetch_base64_data(driver, img_src):
+        return driver.execute_script(
+            f"return fetch('{img_src}').then(response => response.blob()).then(blob => new Promise((resolve, reject) => {{const reader = new FileReader(); reader.onloadend = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(blob);}}))")
+
+    def extract_base64_part(base64_data):
+        return base64_data.split(',')[1]
+
+    def add_padding(base64_data):
+        padding = '=' * (len(base64_data) % 4)
+        return base64_data + padding
+
+    def construct_data_url(base64_data):
+        return f"data:image/png;base64,{base64_data}"
+
+    def handle_duplicates(data_url, unique_base64_data):
+        if data_url in unique_base64_data:
+            print("Duplicate found. Regenerating base64 link...")
+            return True
+        else:
+            unique_base64_data.add(data_url)
+            return False
+
     def get_image_data(self, driver, img_src):
         try:
             print(f"Fetching image data for {img_src}")
-            # Execute JavaScript to fetch the image data as base64
-            base64_data = driver.execute_script(
-                f"return fetch('{img_src}').then(response => response.blob()).then(blob => new Promise((resolve, reject) => {{const reader = new FileReader(); reader.onloadend = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(blob);}}))")
+            base64_data = self.fetch_base64_data(driver, img_src)
+            base64_part = self.extract_base64_part(base64_data)
+            padded_base64_data = self.add_padding(base64_part)
+            data_url = self.construct_data_url(padded_base64_data)
 
-            # Extract the base64 part after the comma
-            base64_data = base64_data.split(',')[1]
-
-            # Add padding if needed
-            padding = '=' * (len(base64_data) % 4)
-            base64_data += padding
-
-            # Construct the Data URL
-            data_url = f"data:image/png;base64,{base64_data}"
-
-            # Check for duplicates
-            if data_url in self.unique_base64_data:
-                print("Duplicate found. Regenerating base64 link...")
+            if self.handle_duplicates(data_url, self.unique_base64_data):
                 return self.get_image_data(driver, img_src)
             else:
-                # Add the generated base64 link to the set
-                self.unique_base64_data.add(data_url)
                 return data_url
 
         except WebDriverException as e:
-            logger.error(
-                f"Error executing JavaScript or taking screenshot - {e}")
+            logger.error(f"Error executing JavaScript or taking screenshot - {e}")
         except Exception as e:
             logger.error(f"Unexpected error: {e}")
 
