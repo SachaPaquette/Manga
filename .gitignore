@@ -1,3 +1,4 @@
 Logs/*
+!Logs/.gitkeep
 .env
 venv/
