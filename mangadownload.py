@@ -17,7 +17,7 @@ def main():
         # Instantiate WebInteractions, FileOperations, and MangaDownloader
             
         web_interactions = WebInteractions()
-        file_operations = FileOperations(web_interactions)
+        file_operations = FileOperations(web_interactions, web_interactions.driver)
         manga_downloader = MangaDownloader(web_interactions, file_operations)
         # Search and select a manga
         chapters, series_name = manga_downloader.search_and_select_manga()

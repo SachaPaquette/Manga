@@ -23,11 +23,13 @@ from MangaDownload.WebInteractions import logger
 class FileOperations:
     failed_images = []  # Array to store the images that failed to save
 
-    def __init__(self, web_interactions):
+    def __init__(self, web_interactions, driver):
         self.web_interactions = web_interactions
+        self.driver = driver
         self.original_tab_handles = None
         self.last_processed_url = None
         self.unique_base64_data = set()
+        self.last_loaded_img_src = None
 
     def sanitize_folder_name(self, folder_name):
         # Replace characters not allowed in a folder name with a space
@@ -67,6 +69,7 @@ class FileOperations:
         except Exception as e:
             logger.error(f"Error saving screenshot: {e}")
             raise
+
 
     def save_long_screenshot(self, driver, save_path, series_name, chapter_number, page_number):
         try:
@@ -141,12 +144,12 @@ class FileOperations:
                     WebDriverWait(driver, 10).until(
                         EC.presence_of_element_located((By.TAG_NAME, Config.IMG)))
 
+                # Update the last processed URL
+                self.last_processed_url = driver.current_url
                 if current_url == self.last_processed_url:
                     logger.warning(
                         f"Duplicate URL detected, but continuing with sub-div {index + 1}")
-
-                # Update the last processed URL
-                self.last_processed_url = driver.current_url
+                    
                 # Save the image
                 self.save_image_in_tab(driver, folder_path, file_name, index)
 
@@ -161,18 +164,12 @@ class FileOperations:
             logger.error(f"Error saving image: {e}")
             raise
 
-        except NoSuchWindowException:
-            # Handle the "no such window" exception
-            logger.error(f"Window closed for sub-div {index + 1}")
-        except Exception as e:
-            logger.error(f"Error saving image: {e}")
-            raise
-
     def save_image_in_tab(self, driver, folder_path, file_name, index):
         try:
             # Locate the img element dynamically
             img_locator = (By.TAG_NAME, Config.IMG)
-            WebInteractions.wait_until_image_loaded()
+            # call the wait until image loaded function
+            self.web_interactions.wait_until_image_loaded(self.last_loaded_img_src)
 
             # Attempt to locate the image element, handle stale element reference if needed
             img = WebDriverWait(driver, 10).until(

@@ -30,7 +30,7 @@ class WebInteractions:
         # Set up and return the WebDriver instance
         options = webdriver.ChromeOptions()
 
-        # options.add_argument('--headless')
+        options.add_argument('--headless')
 
         # Disable logging (i.e., hide the "DevTools listening on..." message)
         options.add_argument("--log-level=3")
@@ -50,8 +50,7 @@ class WebInteractions:
         button_element = span_element.find_element(
             By.XPATH, '..')  # Get the button element
         button_class = button_element.get_attribute('class')
-        # Check if the button element is disabled
-        logger.info(f"Button class: {button_class}")
+        # Check if the button is disabled
         if 'disabled' in button_class:
             # Button is disabled, return False to break out of the loop
             return False
@@ -113,10 +112,10 @@ class WebInteractions:
             logger.error(f"Error waiting for page to load: {e}")
             raise
 
-    def wait_until_image_loaded(self):
+    def wait_until_image_loaded(self, last_loaded_img_src):
         max_retries = 3
         retries = 0
-
+        
         while retries < max_retries:
             try:
                 img_element = WebDriverWait(self.driver, 10).until(
@@ -124,11 +123,11 @@ class WebInteractions:
                 )
                 current_img_src = img_element.get_attribute(Config.SRC)
 
-                if current_img_src == self.last_loaded_img_src:
+                if current_img_src == last_loaded_img_src:
                     raise StaleElementReferenceException(
                         "Img source did not change from last time")
 
-                self.last_loaded_img_src = current_img_src
+                last_loaded_img_src = current_img_src
                 return  # Break out of the loop if successful
 
             except StaleElementReferenceException as stale_exception:
