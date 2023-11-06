@@ -16,28 +16,15 @@ import json
 import base64
 import hashlib
 from Config.logs_config import setup_logging
-
+from Driver.driver_config import driver_setup
 logger = setup_logging('manga_download', Config.MANGA_DOWNLOAD_LOG_PATH)
 
 
 class WebInteractions:
     def __init__(self):
-        self.driver = self.setup_driver()  # Initialize the WebDriver instance
+        self.driver = driver_setup()  # Initialize the WebDriver instance
         self.original_tab_handle = None  # Store the original tab handle
         self.last_loaded_img_src = None  # Store the last loaded image source
-
-    def setup_driver(self):
-        # Set up and return the WebDriver instance
-        options = webdriver.ChromeOptions()
-
-        options.add_argument('--headless')
-
-        # Disable logging (i.e., hide the "DevTools listening on..." message)
-        options.add_argument("--log-level=3")
-
-        driver = webdriver.Chrome(options=options)
-
-        return driver
 
     def cleanup(self):
         self.driver.quit()  # Close the browser window

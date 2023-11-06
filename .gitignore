@@ -2,3 +2,5 @@ Logs/*
 !Logs/.gitkeep
 .env
 venv/
+__pycache__/
+*.pyc
