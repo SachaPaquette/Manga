@@ -189,15 +189,15 @@ class MangaDownloader:
                     try:
                         if previous_chapter_id is None:
                             logger.error(
-                                "Previous chapter ID is None. Exiting.")
+                                "Previous chapter ID is None. Exiting.") # Error handling
                             return
 
                         if previous_chapter_id != self.extract_chapter_id(self.web_interactions.driver.current_url) and not is_long_manga:
-                            logger.info("Chapter completed.")
+                            logger.info("Chapter completed.") # Error handling
                             return
 
                         if Config.LONG_MANGA_IMAGE in self.web_interactions.check_element_exists() and not long_screenshot_taken:
-                            long_screenshot_taken = True
+                            long_screenshot_taken = True # Set the long screenshot boolean variable to True to prevent taking another long screenshot
 
                             # Process long manga differently
                             self.file_operations.save_long_screenshot(
@@ -231,7 +231,7 @@ class MangaDownloader:
 
         if config == Config.MANGA_IMAGE:
             # Save a screenshot of the page
-            self.file_operations.save_screenshot(
+            self.file_operations.take_long_screenshot(
                 self.web_interactions.driver, self.save_path, series_name, chapter_number, page_number)
             # For small manga, proceed with arrow key press
             ActionChains(self.web_interactions.driver).send_keys(

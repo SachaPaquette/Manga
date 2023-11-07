@@ -1,29 +1,14 @@
 # Description: This script downloads manga from mangadex.org and saves it to the local disk.
-import os
 from dotenv import load_dotenv
-import time
-import requests
-from database import find_mangas
-import re
-import json
-from Config.config import Config
-import base64
-import hashlib
-from Config.logs_config import setup_logging
-
 from MangaDownload.WebInteractions import WebInteractions
 from MangaDownload.MangaOperations import MangaDownloader
 from MangaDownload.FileOperations import FileOperations
 # Load environment variables from .env file
 load_dotenv()
 
-
-# Set up logging to a file
-
 def main():
     try:
         # Instantiate WebInteractions, FileOperations, and MangaDownloader
-            
         web_interactions = WebInteractions()
         file_operations = FileOperations(web_interactions, web_interactions.driver)
         manga_downloader = MangaDownloader(web_interactions, file_operations)
@@ -33,16 +18,15 @@ def main():
             # Once you have the chapters, you can loop through them and download images
             for chapter in chapters:
                 print(
-                    f"{chapter['chapter_number']}, {chapter['chapter_name']}")
+                    f"{chapter['chapter_number']}, {chapter['chapter_name']}") # Print the chapter number and name
                 manga_downloader.download_images_from_chapter(
                     chapter['chapter_link'], series_name, chapter['chapter_number']
-                )
-        web_interactions.cleanup()
+                ) # Download the images from the chapter
+        web_interactions.cleanup() # Clean up the resources
     except KeyboardInterrupt as e:
         print("\nQuitting...")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
-
 
 if __name__ == "__main__":
     main()
