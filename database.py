@@ -14,6 +14,15 @@ logger = setup_logging('database', Config.DATABASE_LOG_PATH)
 
 
 def connect_db(database_name, collection_name):
+    """Function to connect to a MongoDB database and return the collection object
+
+    Args:
+        database_name (string): The name of the database
+        collection_name (string): The name of the collection
+
+    Returns:
+        pymongo.collection.Collection: The MongoDB collection object
+    """
     try:
         client = pymongo.MongoClient(
             Config.CONNECTION_STRING)  # Connect to MongoDB
@@ -27,17 +36,33 @@ def connect_db(database_name, collection_name):
 
 
 def connect_collection_db():
+    """Function to connect to the MongoDB collection and return the collection object
+
+    Returns:
+        pymongo.collection.Collection: The MongoDB collection object
+    """
     # Connect to the "Manga" database and "Collection" collection
     return connect_db("Manga", "Collection")
 
 
 def create_index(collection):
-    # Create an index on the 'title' field
+    """Function to create an index on the 'title' field for better performance
+    
+
+    Args:
+        collection (pymongo.collection.Collection): The MongoDB collection
+    """
     # Create an index on the 'title' field
     collection.create_index([('title', pymongo.ASCENDING)])
 
 
 def insert_to_db(collection, data):
+    """Function to insert data into a MongoDB collection
+
+    Args:
+        collection (pymongo.collection.Collection): The MongoDB collection
+        data (list): The data to insert
+    """
     try:
         # Insert the data into the MongoDB collection
         collection.insert_many(data)
@@ -54,6 +79,11 @@ def insert_to_db(collection, data):
 
 
 def insert_manga_to_db(data):
+    """Function to insert manga data such as the title, description and link into the MongoDB collection, using the insert_to_db function defined above
+
+    Args:
+        data (list): The manga's information to insert
+    """
     if data:
         # Connect to the "Manga" database and "Collection" collection and insert the data
         insert_to_db(connect_collection_db(), data)
@@ -62,8 +92,20 @@ def insert_manga_to_db(data):
 
 
 def detect_duplicates():
-    print('detecting duplicates')
+    """
+    Detect and remove duplicate documents in the MongoDB collection.
 
+    This function connects to the "Manga" database and "Collection" collection,
+    creates an index on the 'title' field for better performance, and uses a
+    MongoDB aggregation pipeline to find and remove duplicates.
+
+    Returns:
+        None.
+
+    Raises:
+        pymongo.errors.PyMongoError: If there is an error while connecting to
+            the database or executing the aggregation pipeline.
+    """
     # Connect to the "Manga" database and "Collection" collection
     collection = connect_collection_db()
 
@@ -103,18 +145,46 @@ def detect_duplicates():
 
 
 def fetch_mangas():
+    """
+    Fetches all the manga documents from the "Collection" collection in the "Manga" database.
+
+    Returns:
+    mangas (pymongo.cursor.Cursor): A cursor object containing all the manga documents.
+    """
     # Connect to the "Manga" database and "Collection" collection
     collection = connect_collection_db()
     # Find all the documents in the collection
     mangas = collection.find(
         {}, {'_id': 0, 'title': 1, 'link': 1, 'status': 1, 'desc': 1})
     return mangas
+import re
 
+def create_regex_pattern(input):
+    """
+    Creates a regular expression pattern that matches any string containing the given input, ignoring case.
+
+    Args:
+        input (str): The input string to match.
+
+    Returns:
+        A compiled regular expression pattern object.
+    """
+    return re.compile(f".*{re.escape(input)}.*", re.IGNORECASE)
 
 def find_mangas(input):
+    """
+    Finds mangas in the "Manga" database that match the given input.
+
+    Args:
+        input (str): The input string to match against the manga titles.
+
+    Returns:
+        list: A list of dictionaries containing the matching manga documents. Each dictionary contains the title, link, status, and desc fields.
+        None: If an error occurs during the database query, returns None.
+    """
     try:
         # Create a regex pattern for matching substrings of the input
-        pattern = re.compile(f".*{re.escape(input)}.*", re.IGNORECASE)
+        pattern = create_regex_pattern(input)
 
         # Connect to the "Manga" database and "Collection" collection
         collection = connect_collection_db()
@@ -135,9 +205,14 @@ def find_mangas(input):
 
 
 def remove_doujinshi():
-    # Doujinshi is a genre of manga that is fan-made and not officially published
-    # We WILL NOT be downloading doujinshis
+    """
+    Removes all entries from the "Manga" database's "Collection" collection that have a title
+    including the word "doujinshi". Doujinshi is a genre of manga that is fan-made and not officially
+    published, and will not be downloaded by this program.
 
+    Returns:
+        None
+    """
     try:
         # Connect to the "Manga" database and "Collection" collection
         collection = connect_collection_db()
