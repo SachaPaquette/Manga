@@ -154,8 +154,6 @@ def remove_doujinshi():
         # Delete all entries with titles including "doujinshi"
         collection.delete_many({'title': {'$in': titles_to_remove}})
 
-        print(
-            f"Deleted {len(titles_to_remove)} entries with 'doujinshi' genre.")
         logger.info(
             f"Deleted {len(titles_to_remove)} entries with 'doujinshi' genre.")
     except Exception as e:

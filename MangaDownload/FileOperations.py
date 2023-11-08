@@ -21,6 +21,7 @@ from MangaDownload.WebInteractions import WebInteractions
 from MangaDownload.WebInteractions import logger
 from Driver.driver_config import driver_setup
 import random
+
 class FileOperations:
     failed_images = []  # Array to store the images that failed to save
 
@@ -123,37 +124,19 @@ class FileOperations:
             img_data_list = [self.get_image_data(driver, sub_div.find_element(
                 By.TAG_NAME, Config.IMG).get_attribute(Config.SRC)) for sub_div in sub_divs]
 
-            # Maximum number of pages to save before resetting the driver (to avoid memory issues)
-            MAX_PAGES_BEFORE_RESET = 10
-
             for i, img_data in enumerate(img_data_list):
                 try:
                     index = i + 1
-                    # Check if it's time to reset the driver
-                    if (index) % MAX_PAGES_BEFORE_RESET == 0:
-                        logger.info(
-                            f"Resetting the driver") 
-                        print("Resetting the driver")
-                        # refresh the page
-                        driver = driver_setup()
-                        time.sleep(5)  # Wait for the page to load after reset
-                    
                     file_name = f"page_{index}.png"  # Create the file name
                     self.save_image(driver, img_data,
                                     folder_path, file_name, index)  # Save the image
 
                 except Exception as img_error:
                     logger.error(f"Error saving image {index}: {img_error}")
-                    self.failed_images.append({
-                        'index': index,
-                        'img_src': sub_divs[i].find_element(By.TAG_NAME, Config.IMG).get_attribute(Config.SRC),
-                        'file_name': file_name,
-                        'folder_path': folder_path
-                    })
+
                 finally:
-                    time.sleep(random.uniform(0.1, 2))
-            # Retry the process for the images that failed to save (if any)
-            self.retry_unsaved_images(driver)
+                    time.sleep(random.uniform(0.1, 1))
+
             # reset the unique base64 data set
             self.unique_base64_data = set()
         except Exception as e:
@@ -177,43 +160,23 @@ class FileOperations:
     def save_image(self, driver, img_data, folder_path, file_name, index):
         try:
             if img_data:
-                # Store the current URL
-                current_url = driver.current_url
-                # Navigate to the image data URL
-                driver.get(img_data)
-                # Wait for the image to load
-                time.sleep(5)
-
-                # Handle stale element reference exception
-                self.handle_stale_element_reference(driver)
-
-                # Update the last processed URL
-                self.last_processed_url = driver.current_url
-
-                if current_url == self.last_processed_url:  # Check if the URL is the same
-                    logger.warning(
-                        f"Duplicate URL detected, but continuing with sub-div {index + 1}")
-                    return  # Continue with the next sub-div
-
-                # Save the image
-                self.save_image_in_tab(driver, folder_path, file_name, index)
+                
+                image_data = base64.b64decode(img_data.split(',')[1])
+                with open(os.path.join(folder_path, file_name), 'wb') as file:
+                    file.write(image_data)
             else:
-                logger.warning(
-                    f"Skipping sub-div {index + 1} - Empty image data")
-
+                logger.error(f"Image data not found for page {index}")
         except NoSuchWindowException:
             # Handle the "no such window" exception
             logger.error(f"Window closed for sub-div {index + 1}")
+        except KeyboardInterrupt:
+            print("Exiting...")
+            raise
+        
         except Exception as e:
             logger.error(f"Error saving image: {e}")
             raise
 
-        except NoSuchWindowException:
-            # Handle the "no such window" exception
-            logger.error(f"Window closed for sub-div {index + 1}")
-        except Exception as e:
-            logger.error(f"Error saving image: {e}")
-            raise
 
     def wait_until_image_loaded(driver, last_loaded_img_src):
         # Wait until a new image is loaded in the tab
