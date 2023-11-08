@@ -90,14 +90,24 @@ class WebInteractions:
             raise
 
     def wait_until_page_loaded(self):
+        """
+        Wait until a specific element is loaded on the page.
+
+        Parameters:
+        driver (webdriver): The Selenium webdriver object.
+        timeout (int): The maximum time to wait in seconds.
+        element_id (str): The ID of the element to wait for.
+
+        Returns:
+        None
+        """
         try:
             WebDriverWait(self.driver, 10).until(
                 EC.presence_of_element_located(
                     (By.CLASS_NAME, Config.PAGE_WRAP))
             )
-        except Exception as e:
-            logger.error(f"Error waiting for page to load: {e}")
-            raise
+        except TimeoutException:
+            logger.error("Timed out waiting for page to load")
 
     def wait_until_image_loaded(self, last_loaded_img_src):
         max_retries = 3
@@ -150,7 +160,6 @@ class WebInteractions:
 
     def check_element_exists(self, max_retries=3):
         try:
-
             retries = 0
 
             while retries < max_retries:
@@ -162,28 +171,30 @@ class WebInteractions:
                     manga_image = self.driver.find_elements(
                         By.CLASS_NAME, Config.MANGA_IMAGE)
 
-                    if manga_image:
-
-                        return Config.MANGA_IMAGE
-
                     # Check if the long manga image is present
                     long_manga_image = self.driver.find_elements(
                         By.CLASS_NAME, Config.LONG_MANGA_IMAGE)
 
-                    if long_manga_image:
-
+                    if manga_image:
+                        return Config.MANGA_IMAGE
+                    elif long_manga_image:
                         return Config.LONG_MANGA_IMAGE
+                    else:
+                        raise NoSuchElementException(
+                            "Manga image not found")
 
                     retries += 1
 
                 except TimeoutException:
                     # Handle timeout exception, e.g., log an error message
                     print("Timeout waiting for page to load.")
+                    time.sleep(2)
                     retries += 1
 
             print("Element not found after maximum retries.")
-            return None
+            return False  # Element not found
 
         except NoSuchElementException as e:
             logger.error(f"Error while checking if element exists: {e}")
             raise
+

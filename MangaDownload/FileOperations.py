@@ -21,7 +21,8 @@ from MangaDownload.WebInteractions import WebInteractions
 from MangaDownload.WebInteractions import logger
 from Driver.driver_config import driver_setup
 import random
-
+from PIL import Image
+import io
 class FileOperations:
     failed_images = []  # Array to store the images that failed to save
 
@@ -82,43 +83,43 @@ class FileOperations:
         # Find the manga image
         return driver.find_elements(By.CLASS_NAME, Config.MANGA_IMAGE)
 
-    def take_screenshot(self, elements, screenshot_filepath):
+    def screensave(self, elements, screenshot_filepath):
         try:
             elements[0].screenshot(screenshot_filepath)  # Save the screenshot
         except Exception as e:
             logger.error(f"Error taking screenshot: {e}")
 
-    def take_long_screenshot(self, driver, save_path, series_name, chapter_number, page_number):
+    def take_screenshot(self, driver, save_path, series_name, chapter_number, page_number):
         _, screenshot_filepath = self.create_chapter_folder(
             save_path, series_name, chapter_number, page_number)  # Create the folder path and screenshot filepath
         try:
             elements = self.find_manga_image(driver)  # Find the manga image
             if elements:  # If the manga image is found
                 # Save the screenshot
-                self.take_screenshot(elements, screenshot_filepath)
+                self.screensave(elements, screenshot_filepath)
         except Exception as e:
             logger.error(f"Error saving screenshot: {e}")
             raise
 
     def find_parent_div(self, driver):
+        # Wait for the parent div to load
         return WebDriverWait(driver, 10).until(
             EC.presence_of_element_located(
-                (By.CLASS_NAME, Config.LONG_MANGA_PARENT_DIV))
-        )  # Wait for the parent div to load
+                (By.CLASS_NAME, Config.LONG_MANGA_PARENT_DIV)))
 
     def find_sub_divs(self, driver):
+        # Wait for the parent div to completely load (to avoid missing sub-divs)
         time.sleep(10)
         # Find all sub-divs
         return self.find_parent_div(driver).find_elements(By.CLASS_NAME, Config.LONG_MANGA_SUBDIV)
 
     def save_long_screenshot(self, driver, save_path, series_name, chapter_number, page_number):
         try:
-
+            # Create the folder path
             folder_path = self.create_chapter_folder(
-                save_path, series_name, chapter_number, page_number)  # Create the folder path
-            # higher sleep time to allow the page to load completely
-
-            sub_divs = self.find_sub_divs(driver)  # Find all sub-divs
+                save_path, series_name, chapter_number, page_number)
+            # Find all sub-divs
+            sub_divs = self.find_sub_divs(driver)
 
             # Fetch all image data URLs
             img_data_list = [self.get_image_data(driver, sub_div.find_element(
@@ -126,16 +127,19 @@ class FileOperations:
 
             for i, img_data in enumerate(img_data_list):
                 try:
+                    # Variable to store the index of the image
                     index = i + 1
-                    file_name = f"page_{index}.png"  # Create the file name
-                    self.save_image(driver, img_data,
-                                    folder_path, file_name, index)  # Save the image
-
+                    if img_data is None:
+                        # If the image data is None, skip it
+                        logger.warning(f"Skipping image {index} due to None data URL.")
+                        continue
+                    # Create the file name (e.g. page_1.png)
+                    file_name = f"page_{index}.png"
+                    # Save the image
+                    self.save_image(img_data,
+                                    folder_path, file_name, index)
                 except Exception as img_error:
                     logger.error(f"Error saving image {index}: {img_error}")
-
-                finally:
-                    time.sleep(random.uniform(0.1, 1))
 
             # reset the unique base64 data set
             self.unique_base64_data = set()
@@ -145,25 +149,32 @@ class FileOperations:
         except KeyboardInterrupt:
             print("Exiting...")
             raise
-
-    def handle_stale_element_reference(self, driver):
-        try:
-            WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.TAG_NAME, Config.IMG)))
-        except StaleElementReferenceException:
-            logger.warning("Stale element reference. Refreshing the page.")
-            driver.refresh()
-            time.sleep(2)
-            WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.TAG_NAME, Config.IMG)))
-
-    def save_image(self, driver, img_data, folder_path, file_name, index):
+    def save_image(self, img_data, folder_path, file_name, index):
+        """Function to save the image data to a file. If the image is too large, it is split into chunks and saved.
+        
+        Args:
+            img_data (string): The base64 data of the image.
+            folder_path (string): The folder path to save the image.
+            file_name (string): The file name of the image that will be saved. (ex: page_1.png)
+            index (int): The index of the image. 
+        """
         try:
             if img_data:
-                
                 image_data = base64.b64decode(img_data.split(',')[1])
-                with open(os.path.join(folder_path, file_name), 'wb') as file:
-                    file.write(image_data)
+                img = Image.open(io.BytesIO(image_data))
+
+                # Check the height of the image
+                img_height = img.size[1]
+
+                if img_height > 2000:
+                    # Split the image into chunks
+                    chunk_height = 2000
+                    self.split_image(img, folder_path, file_name, chunk_height)
+                else:
+                    # Save the image as-is
+                    with open(os.path.join(folder_path, file_name), 'wb') as file:
+                        file.write(image_data)
+
             else:
                 logger.error(f"Image data not found for page {index}")
         except NoSuchWindowException:
@@ -172,101 +183,93 @@ class FileOperations:
         except KeyboardInterrupt:
             print("Exiting...")
             raise
-        
         except Exception as e:
             logger.error(f"Error saving image: {e}")
             raise
 
+    def split_image(self, img, folder_path, file_name, chunk_height):
+        """This function splits an image into chunks of the specified height and saves each chunk as a separate image.
+        This is done to avoid having a single image that is too large.
 
-    def wait_until_image_loaded(driver, last_loaded_img_src):
-        # Wait until a new image is loaded in the tab
-        WebDriverWait(driver, 10).until(
-            lambda driver: driver.execute_script(
-                f"return (document.querySelector('{Config.IMG}') || {{}}).src !== '{last_loaded_img_src}'"
-            )
-        )
+        Args:
+            img (Image): The image to split into chunks.
+            folder_path (string): The folder path to save the image chunks.
+            file_name (string): The file name of the image that wiil be saved in chunks. (ex: page_1.png)
+            chunk_height (int): The height of each image chunk.
+        """
+        # Get the width and height of the image
+        width, height = img.size
+        # Split the image into chunks
+        for i in range(0, height, chunk_height):
+            box = (0, i, width, min(i + chunk_height, height))
+            chunk = img.crop(box)
 
-    def locate_image(driver):
-        # Locate the img element dynamically
-        img_locator = (By.TAG_NAME, Config.IMG)
-        return WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located(img_locator)
-        )
+            # Save each chunk with a unique file name
+            chunk_file_name = f"part_{i // chunk_height}_{file_name}"
+            with open(os.path.join(folder_path, chunk_file_name), 'wb') as file:
+                # Save the image chunk
+                chunk.save(file)
 
-    def save_screenshot(img, file_path):
-        # Save the screenshot of the image
-        img.screenshot(file_path)
-
-    def save_image_in_tab(self, driver, folder_path, file_name, index):
-        try:
-            # Locate the img element dynamically
-            img_locator = (By.TAG_NAME, Config.IMG)
-            # call the wait until image loaded function
-            self.web_interactions.wait_until_image_loaded(
-                self.last_loaded_img_src)
-
-            # Attempt to locate the image element, handle stale element reference if needed
-            img = WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located(img_locator))
-
-            file_path = os.path.join(folder_path, file_name)
-            img.screenshot(file_path)
-
-            logger.info(f"Screenshot for page {index} saved")
-
-        except StaleElementReferenceException:
-            logger.error(
-                f"Stale element reference while saving image for page {index}")
-        except TimeoutException:
-            logger.error(
-                f"Timeout waiting for image element for page {index}")
-        except Exception as e:
-            logger.error(f"Error saving image: {e}")
-            raise
-
-    def retry_unsaved_images(self, driver):
-        for failed_image in self.failed_images:
-            img_data = failed_image['img_data']
-            folder_path = failed_image['folder_path']
-            file_name = failed_image['file_name']
-            index = failed_image['index']
-
-            try:
-                self.save_image(driver, img_data,
-                                folder_path, file_name, index)
-                # If the image is saved successfully, remove it from the failed images list
-                self.failed_images.remove(failed_image)
-            except Exception as img_error:
-                logger.error(f"Error saving image {index}: {img_error}")
-
-        # If there are still failed images, retry the process for them
-        if self.failed_images:
-            logger.warning("Retrying failed images...")
-            self.retry_unsaved_images(driver)
-        else:
-            logger.info("All images saved successfully.")
 
     def fetch_base64_data(self, driver, img_src):
-        # Fetch the base64 data using JavaScript
+        """Fetch the base64 data from the image source. This is done using JavaScript. The image source is a blob URL,
+        which means that the image data is not directly accessible. 
+        So, we use JavaScript to fetch the image data and return it as a base64 string.
+        
+
+        Args:
+            driver (WebDriver) : The Selenium WebDriver instance.
+            img_src (string) : The image source. 
+
+        Returns:
+            string: The base64 data of the image.
+        """
         return driver.execute_script(
             f"return fetch('{img_src}').then(response => response.blob()).then(blob => new Promise((resolve, reject) => {{const reader = new FileReader(); reader.onloadend = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(blob);}}))")
 
     def extract_base64_part(self, base64_data):
-        return base64_data.split(',')[1] # Extract the base64 part
+        """ Extract the base64 from the data URL. (eg: data:image/png;base64,base64_data -> base64_data) 
+
+        Args:
+            base64_data (string): The data URL.
+
+        Returns:
+            string: The base64 part of the data URL.
+        """
+        return base64_data.split(',')[1]  # Extract the base64 part
 
     def add_padding(self, base64_data):
+        """Add padding to the base64 part of the data URL. (eg: base64_data -> base64_data + padding) 
+        The padding is added to the base64 part to make the length of the base64 part a multiple of 4.
+        Since having a length that is not a multiple of 4 can cause issues while decoding the base64 data.
+        
+        Args:
+            base64_data (string): The base64 part of the data URL.
+            
+        Returns:
+            string: The base64 part of the data URL with padding.
+        """
         padding = '=' * (len(base64_data) % 4)
-        return base64_data + padding # Add padding to the base64 part
+        return base64_data + padding  # Add padding to the base64 part
 
     def construct_data_url(self, base64_data):
-        return f"data:image/png;base64,{base64_data}" # Construct the data URL
+        """Construct an url from the base64 data. (eg: base64_data -> data:image/png;base64,base64_data)
+
+        Args:
+            base64_data (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
+        return f"data:image/png;base64,{base64_data}"  # Construct the data URL
 
     def handle_duplicates(self, data_url):
         if data_url in self.unique_base64_data:
             print("Duplicate found. Regenerating base64 link...")
             return True
         else:
-            self.unique_base64_data.add(data_url) # Add the data URL to the set of unique base64 data
+            # Add the data URL to the set of unique base64 data
+            self.unique_base64_data.add(data_url)
             return False
 
     def get_image_data(self, driver, img_src):
@@ -282,8 +285,8 @@ class FileOperations:
                 padded_base64_data)  # Construct the data URL
 
             if self.handle_duplicates(data_url):
-                # Regenerate the data URL if it's a duplicate
-                return self.get_image_data(driver, img_src)
+                # If the data URL is a duplicate, return None
+                return None
             else:
                 return data_url  # Return the data URL
 
@@ -295,7 +298,7 @@ class FileOperations:
 
     def delete_last_page(self, save_path, series_name, chapter_number, page_number):
         _, screenshot_filepath = self.create_chapter_folder(
-            save_path, series_name, chapter_number, page_number) # Create the folder path and screenshot filepath
+            save_path, series_name, chapter_number, page_number)  # Create the folder path and screenshot filepath
         try:
             os.remove(screenshot_filepath)  # Delete the last page
         except Exception as e:

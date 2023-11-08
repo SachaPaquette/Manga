@@ -5,7 +5,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import  NoSuchElementException
+from selenium.common.exceptions import  NoSuchElementException, TimeoutException
 from dotenv import load_dotenv
 import time
 from database import find_mangas
@@ -23,7 +23,18 @@ class MangaDownloader:
         self.file_operations = file_operations if file_operations else FileOperations(self.web_interactions)
         self.save_path = os.getenv("SAVE_PATH")
 
+
+
+ 
     def fetch_chapters(self, link):
+        """
+        Fetches all the chapters for a given manga link.
+
+        :param link: The link to the manga.
+        :type link: str
+        :return: A list of chapter objects.
+        :return type: list
+        """
         logger.info(f"Fetching chapters for link: {link}")
         self.web_interactions.driver.get(link)  # Navigate to the link
         print("Fetching chapters...")
@@ -87,15 +98,30 @@ class MangaDownloader:
             return link
 
     def find_chapter_number(self, chapter):
-        try:
-            nested_divs = chapter.find_elements(
-                by=By.TAG_NAME, value=Config.DIV)
-            for nested_div in nested_divs:
-                chapter_number = nested_div.find_element(
-                    by=By.CLASS_NAME, value=Config.CHAPTER_NUMBER)
+        """
+        This function finds the chapter number from a given chapter element.
 
+        Parameters:
+        chapter (WebElement): A WebElement representing a chapter.
+
+        Returns:
+        chapter_number (WebElement): A WebElement representing the chapter number.
+        """
+
+        try:
+            # Find all div elements within the chapter element
+            nested_divs = chapter.find_elements(by=By.TAG_NAME, value=Config.DIV)
+
+            # Iterate over each div element
+            for nested_div in nested_divs:
+                # Find the chapter number within the div element
+                chapter_number = nested_div.find_element(by=By.CLASS_NAME, value=Config.CHAPTER_NUMBER)
+
+                # Return the chapter number
                 return chapter_number
+
         except NoSuchElementException:
+            # If the chapter number is not found, do nothing and exit the function
             pass
 
     def find_chapter_link(self, chapter):
@@ -181,10 +207,10 @@ class MangaDownloader:
                 print("Waiting for chapter to load...")
                 previous_chapter_id = self.extract_chapter_id(
                     chapter_link)  # Get the initial chapter ID from the URL
-                time.sleep(2)
+                
                 # Check if it's a long manga
                 is_long_manga = Config.LONG_MANGA_IMAGE in self.web_interactions.check_element_exists()
-                time.sleep(2)
+                
                 while True:
                     try:
                         if previous_chapter_id is None:
@@ -202,13 +228,19 @@ class MangaDownloader:
                             # Process long manga differently
                             self.file_operations.save_long_screenshot(
                                 self.web_interactions.driver, self.save_path, series_name, chapter_number, None)
-                            # Increment the page number for long manga
                             break
 
                         elif not is_long_manga:
                             # Press the right arrow key to go to the next page for small manga
-                            self.process_page(
-                                page_number, previous_chapter_id, series_name, chapter_number)
+                            element_exists_result = self.web_interactions.check_element_exists()
+                            
+                            if element_exists_result:
+                                self.process_page(
+                                    page_number, previous_chapter_id, series_name, chapter_number)
+                            else:
+                                # Handle the case where the result is None
+                                logger.warning("Element does not exist.")
+                                break
 
                     except StopIteration:
                         break
@@ -216,6 +248,10 @@ class MangaDownloader:
                         if not is_long_manga:
                             page_number += 1  # Increment the page number for small manga
 
+        except NoSuchElementException as e:
+            logger.error(f"Element not found: {e}")
+        except TimeoutException as e:
+            logger.error(f"Loading took too much time: {e}")
         except Exception as e:
             logger.critical(f"Critical error: {e}")
         finally:
@@ -229,37 +265,48 @@ class MangaDownloader:
         # Check if it's a long manga
         config = self.web_interactions.check_element_exists()
 
-        if config == Config.MANGA_IMAGE:
-            # Save a screenshot of the page
-            self.file_operations.take_long_screenshot(
-                self.web_interactions.driver, self.save_path, series_name, chapter_number, page_number)
-            # For small manga, proceed with arrow key press
-            ActionChains(self.web_interactions.driver).send_keys(
-                Keys.ARROW_RIGHT).perform()
-        elif config == None:
-            print("No manga image found")
-            return
-        else:
-            print("Error")
-            return
-        # Get the current chapter ID after the arrow key press
-        current_chapter_id = self.extract_chapter_id(
-            self.web_interactions.driver.current_url)
+        error_count = 0  # Initialize error count
+        max_error_count = 3  # Set a maximum number of consecutive errors allowed
 
-        # Check if the chapter ID has changed (i.e., the chapter has ended)
-        if current_chapter_id != previous_chapter_id:
-            logger.info("Chapter completed.")
-            self.file_operations.delete_last_page(
-                self.save_path, series_name, chapter_number, page_number)
-            raise StopIteration
+        while True:
+            if config == Config.MANGA_IMAGE:
+                # Save a screenshot of the page
+                self.file_operations.take_screenshot(
+                    self.web_interactions.driver, self.save_path, series_name, chapter_number, page_number)
+                # For small manga, proceed with arrow key press
+                ActionChains(self.web_interactions.driver).send_keys(
+                    Keys.ARROW_RIGHT).perform()
+            elif config == None:
+                print("No manga image found")
+                return
+            else:
+                print("Error")
+                error_count += 1  # Increment error count
+                if error_count >= max_error_count:
+                    print(f"Exceeded maximum consecutive errors ({max_error_count}). Exiting.")
+                    raise StopIteration
+                continue
 
-        # Check if the URL has changed after pressing the right arrow key
-        if self.web_interactions.driver.current_url == before_url:
-            logger.error(
-                "URL did not change after pressing the right arrow key. Stopping.")
-            # Popup is present on the page
-            self.web_interactions.dismiss_popup_if_present()
-            raise StopIteration
+            # Get the current chapter ID after the arrow key press
+            current_chapter_id = self.extract_chapter_id(
+                self.web_interactions.driver.current_url)
+
+            # Check if the chapter ID has changed (i.e., the chapter has ended)
+            if current_chapter_id != previous_chapter_id:
+                logger.info("Chapter completed.")
+                self.file_operations.delete_last_page(
+                    self.save_path, series_name, chapter_number, page_number)
+                raise StopIteration
+
+            # Check if the URL has changed after pressing the right arrow key
+            if self.web_interactions.driver.current_url == before_url:
+                logger.error(
+                    "URL did not change after pressing the right arrow key. Stopping.")
+                # Popup is present on the page
+                self.web_interactions.dismiss_popup_if_present()
+                raise StopIteration
+            else:
+                break
 
     def search_and_select_manga(self):
         # Ask the user to enter the name of the manga
