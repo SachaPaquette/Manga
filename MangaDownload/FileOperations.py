@@ -27,6 +27,12 @@ class FileOperations:
     failed_images = []  # Array to store the images that failed to save
 
     def __init__(self, web_interactions, driver):
+        """Initialize the FileOperations instance. 
+    
+        Args:
+            web_interactions (WebInteractions): The WebInteractions instance.
+            driver (WebDriver): The Selenium WebDriver instance.
+        """
         # Initialize the WebInteractions instance
         self.web_interactions = web_interactions
         # Initialize the WebDriver instance
@@ -41,6 +47,14 @@ class FileOperations:
         self.last_loaded_img_src = None
 
     def sanitize_folder_name(self, folder_name):
+        """Function to sanitize the folder name. This means that the folder name will be stripped of any characters that are not allowed in a folder name.
+
+        Args:
+            folder_name (string): The folder name to sanitize. 
+
+        Returns:
+            string: The sanitized folder name.
+        """
         # Replace characters not allowed in a folder name with a space
         sanitized_name = re.sub(r'[<>:"/\\|?*]', ' ', folder_name)
         sanitized_name = sanitized_name.strip()  # Remove leading and trailing spaces
@@ -50,7 +64,16 @@ class FileOperations:
         return sanitized_name
 
     def create_folder_path(self, save_path, sanitized_folder_name, chapter_number):
-        # Create the folder path
+        """Function to generate the folder path. This will be used to save the manga chapters.
+
+        Args:
+            save_path (string): The path to save the manga.
+            sanitized_folder_name (string): The sanitized folder name.
+            chapter_number (int): The chapter number.
+
+        Returns:
+            string: The folder path.
+        """
         return os.path.join(save_path, sanitized_folder_name, str(chapter_number))
 
     def create_screenshot_filename(self, page_number):
@@ -201,7 +224,6 @@ class FileOperations:
                 save_path, series_name, chapter_number, page_number)
             # Find all sub-divs
             sub_divs = self.find_sub_divs(driver)
-
             # Fetch all image data URLs
             img_data_list = [self.get_image_data(driver, sub_div.find_element(
                 By.TAG_NAME, Config.IMG).get_attribute(Config.SRC)) for sub_div in sub_divs]
@@ -210,15 +232,12 @@ class FileOperations:
                 try:
                     # Variable to store the index of the image
                     index = i + 1
-                    if img_data is None:
-                        # If the image data is None, skip it
-                        logger.warning(f"Skipping image {index} due to None data URL.")
-                        continue
-                    # Create the file name (e.g. page_1.png)
-                    file_name = f"page_{index}.png"
-                    # Save the image
-                    self.save_image(img_data,
-                                    folder_path, file_name, index)
+                    if img_data:  
+                        # Create the file name (e.g. page_1.png)
+                        file_name = f"page_{index}.png"
+                        # Save the image
+                        self.save_image(img_data,
+                                        folder_path, file_name, index)
                 except Exception as img_error:
                     logger.error(f"Error saving image {index}: {img_error}")
 
@@ -230,6 +249,18 @@ class FileOperations:
         except KeyboardInterrupt:
             print("Exiting...")
             raise
+        
+    def write_image(self, image_data, folder_path, file_name):
+        """Function to write the image data to a file. Creating the file is done using the "with" statement.
+
+        Args:
+            image_data (string): The base64 data of the image.
+            folder_path (string): The folder path to save the image.
+            file_name (string): The file name of the image that will be saved. (ex: page_1.png)
+        """
+        with open(os.path.join(folder_path, file_name), 'wb') as file:
+            file.write(image_data)
+
     def save_image(self, img_data, folder_path, file_name, index):
         """Function to save the image data to a file. If the image is too large, it is split into chunks and saved.
         
@@ -253,9 +284,7 @@ class FileOperations:
                     self.split_image(img, folder_path, file_name, chunk_height)
                 else:
                     # Save the image as-is
-                    with open(os.path.join(folder_path, file_name), 'wb') as file:
-                        file.write(image_data)
-
+                    self.write_image(image_data, folder_path, file_name)
             else:
                 logger.error(f"Image data not found for page {index}")
         except NoSuchWindowException:
@@ -345,8 +374,16 @@ class FileOperations:
         return f"data:image/png;base64,{base64_data}"  # Construct the data URL
 
     def handle_duplicates(self, data_url):
+        """Function to detect if there are any duplicates in the base64 urls. This is done by storing the base64 data in a set.
+
+        Args:
+            data_url (string): The data URL.
+
+        Returns:
+            bool: True if the data URL is a duplicate, False otherwise.
+        """
         if data_url in self.unique_base64_data:
-            print("Duplicate found. Regenerating base64 link...")
+            
             return True
         else:
             # Add the data URL to the set of unique base64 data
