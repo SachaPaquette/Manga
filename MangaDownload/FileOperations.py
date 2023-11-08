@@ -54,13 +54,42 @@ class FileOperations:
         return os.path.join(save_path, sanitized_folder_name, str(chapter_number))
 
     def create_screenshot_filename(self, page_number):
-        return f"page_{page_number}.png"  # Create the screenshot filename
+        """Generate the screenshot filename. (eg: page_1.png)
+
+        Args:
+            page_number (int): The page number.
+
+        Returns:
+            string: The screenshot filename.
+        """
+        return f"page_{page_number}.png"
 
     def create_screenshot_filepath(self, folder_path, screenshot_filename):
-        # Create the screenshot filepath
+        """Function to generate the screenshot filepath. This will be used to save the screenshot.
+
+        Args:
+            folder_path (string): The folder path to save the screenshot.
+            screenshot_filename (string): The screenshot filename.
+
+        Returns:
+            string: The screenshot filepath.
+        """
         return os.path.join(folder_path, screenshot_filename)
 
     def create_chapter_folder(self, save_path, series_name, chapter_number, page_number=None):
+        """Function to create the folder path and screenshot filepath for a chapter.
+        This function also creates the folder if it doesn't exist.
+        
+    
+        Args:
+            save_path (string): The path to save the manga.
+            series_name (string): The name of the manga series.
+            chapter_number (string): The chapter number. (ex: Chapter 1)
+            page_number (int, optional): The page number. Defaults to None.
+
+        Returns:
+            _type_: _description_
+        """
         sanitized_folder_name = self.sanitize_folder_name(
             series_name)  # Sanitize the folder name
         folder_path = self.create_folder_path(
@@ -80,16 +109,39 @@ class FileOperations:
             return folder_path  # Return the folder path
 
     def find_manga_image(self, driver):
-        # Find the manga image
+        """Function to find the manga image. This function is used for short manga pages.
+        
+        Args:
+            driver (WebDriver): The Selenium WebDriver instance.
+
+        Returns:
+            list: A list of WebElements that contain the manga image.
+        """
         return driver.find_elements(By.CLASS_NAME, Config.MANGA_IMAGE)
 
     def screensave(self, elements, screenshot_filepath):
+        """Function to screenshot the manga page.
+        
+        Args: 
+            elements (list): A list of WebElements that contain the manga image.
+            screenshot_filepath (string): The path to save the screenshot.
+        """
         try:
             elements[0].screenshot(screenshot_filepath)  # Save the screenshot
         except Exception as e:
             logger.error(f"Error taking screenshot: {e}")
 
     def take_screenshot(self, driver, save_path, series_name, chapter_number, page_number):
+        """Function to take a screenshot of a manga page. This function is used for short manga pages.
+           This will also save the screenshot to the specified folder path.
+           
+        Args:
+            driver (WebDriver): The Selenium WebDriver instance.
+            save_path (string): The path to save the manga.
+            series_name (string): The name of the manga series.
+            chapter_number (string): The chapter number. (ex: Chapter 1)
+            page_number (int): The page number.
+        """
         _, screenshot_filepath = self.create_chapter_folder(
             save_path, series_name, chapter_number, page_number)  # Create the folder path and screenshot filepath
         try:
@@ -102,18 +154,47 @@ class FileOperations:
             raise
 
     def find_parent_div(self, driver):
+        """Function to find the parent div that hold all of the long manga chapter pages.
+           
+
+        Args:
+            driver (WebDriver): The Selenium WebDriver instance.
+
+        Returns:
+            WebElement: The parent div that holds all of the long manga chapter pages.
+        """
         # Wait for the parent div to load
         return WebDriverWait(driver, 10).until(
             EC.presence_of_element_located(
                 (By.CLASS_NAME, Config.LONG_MANGA_PARENT_DIV)))
 
     def find_sub_divs(self, driver):
+        """Function to find all sub-divs in a long manga page. A long manga page is a single page that contains all of the chapter.
+        Inside the parent div, there are multiple sub-divs. Each sub-div contains a part of the chapter.
+
+        Args:
+            driver (WebDriver): The Selenium WebDriver instance.
+
+        Returns:
+            list: A list of all sub-divs from the parent-div.
+        """
         # Wait for the parent div to completely load (to avoid missing sub-divs)
         time.sleep(10)
         # Find all sub-divs
         return self.find_parent_div(driver).find_elements(By.CLASS_NAME, Config.LONG_MANGA_SUBDIV)
 
     def save_long_screenshot(self, driver, save_path, series_name, chapter_number, page_number):
+        """Function to save a screenshot of a long manga page.
+           A long manga page is a single page that contains all of the chapter.
+           
+
+        Args:
+            driver (WebDriver): The Selenium WebDriver instance.
+            save_path (string): The path to save the manga.
+            series_name (string): The name of the manga series.
+            chapter_number (string): The chapter number. (ex: Chapter 1)
+            page_number (int): The page number. (ex: 1)
+        """
         try:
             # Create the folder path
             folder_path = self.create_chapter_folder(
