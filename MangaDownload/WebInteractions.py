@@ -109,38 +109,43 @@ class WebInteractions:
         except TimeoutException:
             logger.error("Timed out waiting for page to load")
 
-    def wait_until_image_loaded(self, last_loaded_img_src):
-        max_retries = 3
-        retries = 0
-        
-        while retries < max_retries:
-            try:
-                img_element = WebDriverWait(self.driver, 10).until(
-                    EC.presence_of_element_located((By.TAG_NAME, Config.IMG))
-                )
-                current_img_src = img_element.get_attribute(Config.SRC)
+    def wait_until_image_loaded(self):
+            """
+            Waits until the manga image is fully loaded on the page.
+            If the image is not loaded after a certain number of retries, raises a StaleElementReferenceException.
+            """
+            max_retries = 3
+            retries = 0
+            
+            while retries < max_retries:
+                try:
+                    element = WebDriverWait(self.driver, 10).until(
+                        EC.presence_of_element_located((By.CLASS_NAME, Config.MANGA_IMAGE)
+                    )
+                )   
+                    img_element = element.find_element(By.TAG_NAME, 'img')
+                    # Get the image source
+                    img_src = img_element.get_attribute('src')
+                    
+                    if img_src and (img_src.startswith('blob:') or img_src.startswith('data:image')):
+                        # Image source is not empty and starts with 'data:image', indicating a fully loaded image
+                        return
 
-                if current_img_src == last_loaded_img_src:
-                    raise StaleElementReferenceException(
-                        "Img source did not change from last time")
+                except StaleElementReferenceException as stale_exception:
+                    logger.error(f"Stale element reference: {stale_exception}")
+                    # Refresh the entire page
+                    self.driver.refresh()
 
-                last_loaded_img_src = current_img_src
-                return  # Break out of the loop if successful
+                except TimeoutException as timeout_exception:
+                    logger.error(
+                        f"Timeout waiting for image to load: {timeout_exception}")
+                time.sleep(1.5)
+                retries += 1
 
-            except StaleElementReferenceException as stale_exception:
-                logger.error(f"Stale element reference: {stale_exception}")
-                # Refresh the entire page
-                self.driver.refresh()
+            # If the loop completes without a successful attempt, raise an exception
+            raise StaleElementReferenceException(
+                "Max retries reached, unable to load image")
 
-            except TimeoutException as timeout_exception:
-                logger.error(
-                    f"Timeout waiting for image to load: {timeout_exception}")
-
-            retries += 1
-
-        # If the loop completes without a successful attempt, raise an exception
-        raise StaleElementReferenceException(
-            "Max retries reached, unable to load image")
 
     def dismiss_popup_if_present(self):
         try:
@@ -198,3 +203,11 @@ class WebInteractions:
             logger.error(f"Error while checking if element exists: {e}")
             raise
 
+    def naviguate(self, url):
+        try:
+            self.driver.get(url)
+            self.wait_until_page_loaded()
+            
+        except Exception as e:
+            logger.error(f"Error while navigating to {url}: {e}")
+            
