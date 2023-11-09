@@ -90,7 +90,23 @@ def insert_manga_to_db(data):
     else:
         logger.info("No data to insert")
 
+def delete_duplicates(collection, duplicates_cursor):
+    """
+    Deletes extra occurrences of duplicate documents in a MongoDB collection.
 
+    Args:
+        collection (pymongo.collection.Collection): The MongoDB collection to remove duplicates from.
+        duplicates_cursor (pymongo.command_cursor.CommandCursor): The cursor containing the duplicate documents.
+
+    Returns:
+        None
+    """
+    # Iterate over the duplicate documents and remove extra occurrences
+    for duplicate_group in duplicates_cursor:
+        # Get the extra occurrences
+        extra_occurrences = duplicate_group['ids'][1:]
+        # Delete the extra occurrences
+        collection.delete_many({'_id': {'$in': extra_occurrences}})
 def detect_duplicates():
     """
     Detect and remove duplicate documents in the MongoDB collection.
@@ -133,15 +149,11 @@ def detect_duplicates():
 
     # Find all the duplicate documents
     duplicates_cursor = collection.aggregate(duplicates_pipeline)
+    # Remove the duplicate documents
+    delete_duplicates(collection, duplicates_cursor)
 
-    # Iterate over the duplicate documents and remove extra occurrences
-    for duplicate_group in duplicates_cursor:
-        # Get the extra occurrences
-        extra_occurrences = duplicate_group['ids'][1:]
-        # Delete the extra occurrences
-        collection.delete_many({'_id': {'$in': extra_occurrences}})
 
-    print('duplicates removed')
+    print('Duplicates are now removed :)')
 
 
 def fetch_mangas():
