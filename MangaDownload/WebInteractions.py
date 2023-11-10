@@ -153,10 +153,12 @@ class WebInteractions:
     def dismiss_popup_if_present(self):
         try:
             # Check if the popup is present
-            popup = self.driver.find_element(By.CLASS_NAME, Config.POP_UP)
+            popup = self.find_single_element(
+                By.CLASS_NAME, Config.POPUP, None)
 
             # Find all buttons in the popup
-            buttons = popup.find_elements(By.TAG_NAME, 'button')
+            buttons = self.find_multiple_elements(
+                By.TAG_NAME, 'button', popup)
 
             # Filter the button with text "Continue" and click it
             continue_button = next(
@@ -176,20 +178,15 @@ class WebInteractions:
                     self.wait_until_page_loaded()
 
                     # Check if the manga image is present
-                    manga_image = self.driver.find_elements(
-                        By.CLASS_NAME, Config.MANGA_IMAGE)
+                    manga_images = self.find_multiple_elements(By.CLASS_NAME, Config.MANGA_IMAGE, None)
+                    long_manga_images = self.find_multiple_elements(By.CLASS_NAME, Config.LONG_MANGA_IMAGE, None)
 
-                    # Check if the long manga image is present
-                    long_manga_image = self.driver.find_elements(
-                        By.CLASS_NAME, Config.LONG_MANGA_IMAGE)
-
-                    if manga_image:
+                    if manga_images:
                         return Config.MANGA_IMAGE
-                    elif long_manga_image:
+                    elif long_manga_images:
                         return Config.LONG_MANGA_IMAGE
                     else:
-                        raise NoSuchElementException(
-                            "Manga image not found")
+                        raise NoSuchElementException("Manga image not found")
 
                     retries += 1
 
@@ -207,10 +204,62 @@ class WebInteractions:
             
 
     def naviguate(self, url):
-        try:
-            self.driver.get(url)
-            self.wait_until_page_loaded()
-            
-        except Exception as e:
-            logger.error(f"Error while navigating to {url}: {e}")
-            
+            """
+            Navigates to the specified URL using the Selenium WebDriver instance associated with this object.
+
+            Args:
+                url (str): The URL to navigate to.
+
+            Raises:
+                Exception: If an error occurs while navigating to the specified URL.
+            """
+            try:
+                self.driver.get(url)
+                self.wait_until_page_loaded()
+                
+            except Exception as e:
+                logger.error(f"Error while navigating to {url}: {e}")
+                
+    def find_multiple_elements(self, type_name, value, element=None):
+            """
+            Finds multiple elements on the page using the specified search criteria.
+
+            Args:
+                type_name (str): The type of search to perform (e.g., "class name", "tag name", etc.).
+                value (str): The value to search for.
+                element (WebElement): The element to search within (optional).
+
+            Returns:
+                A list of WebElements that match the specified search criteria.
+            """
+            by_type = getattr(By, type_name.replace(' ', '_').upper())
+
+            if element:
+                return element.find_elements(by=by_type, value=value)
+            else:
+                return self.driver.find_elements(by=by_type, value=value)
+
+    def find_single_element(self, type_name, value, element=None):
+        """
+        Finds a single element on the page using the specified search criteria.
+
+        Args:
+            type_name (str): The type of search to perform (e.g., "class name", "tag name", etc.).
+            value (str): The value to search for.
+            element (WebElement): The element to search within (optional).
+
+        Returns:
+            The WebElement that matches the specified search criteria.
+        """
+        by_type = getattr(By, type_name.replace(' ', '_').upper())
+
+        if element:
+            return element.find_element(by=by_type, value=value)
+        else:
+            return self.driver.find_element(by=by_type, value=value)
+        
+    def wait_until_element_loaded(self, type_name, value):
+        by_type = getattr(By, type_name.replace(' ', '_').upper())
+        WebDriverWait(self.driver, 10).until(
+            EC.presence_of_element_located((by_type, value))
+        )

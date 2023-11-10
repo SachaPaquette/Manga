@@ -44,7 +44,7 @@ class MangaDownloader:
         :return type: list
         """
         logger.info(f"Fetching chapters for link: {link}")
-        self.web_interactions.driver.get(link)  # Navigate to the link
+        self.web_interactions.naviguate(link)  # Navigate to the link
         print("Fetching chapters...")
 
         try:
@@ -56,7 +56,7 @@ class MangaDownloader:
                 by=By.CLASS_NAME, value=Config.CHAPTER_CARDS)
 
             # Loop while there are still chapters to fetch
-            chapters_array, first_chapter_number = self.process_chapter_cards(
+            chapters_array, _ = self.process_chapter_cards(
                 chapter_cards)
             while True:  # Change the loop condition
                 print("Waiting for next page to load...")
@@ -297,10 +297,18 @@ class MangaDownloader:
         return os.path.join(self.save_path, sanitized_folder_name, str(chapter_number))
 
     def navigate_to_chapter(self, chapter_link):
-        self.web_interactions.driver.get(chapter_link)
+        """
+        Navigates to the given chapter link and waits for the page to load.
+
+        Args:
+            chapter_link (str): The URL of the chapter to navigate to.
+        """
+        self.web_interactions.naviguate(chapter_link)
         time.sleep(3)  # Wait for the page to load
+        self.web_interactions.wait_until_element_loaded(By.CSS_SELECTOR, 'body')
 
     def process_chapter(self, is_long_manga, previous_chapter_id, series_name, chapter_number):
+        # Initialize the page number and long screenshot taken variables
         page_number = 1
         long_screenshot_taken = False
 
@@ -334,6 +342,7 @@ class MangaDownloader:
                 break
             finally:
                 if not is_long_manga:
+                    # Increment the page number
                     page_number += 1
 
 

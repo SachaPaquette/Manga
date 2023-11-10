@@ -32,6 +32,7 @@ class Config:
     MANGA_IMAGE = "mx-auto.h-full.md--page.flex" # Class name of the manga image
     LONG_MANGA_IMAGE = "md--page.ls.limit-width.mx-auto" # Class name of the long manga image
     MANGA_DOWNLOAD_LOG_PATH = "./Logs/MangaDownload.log" # Path to the log file
+    UNLOADED_SUB_DIV = ".unloaded.mx-auto" # Class name of the unloaded sub div
     
 
     ##############################
