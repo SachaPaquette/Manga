@@ -271,70 +271,17 @@ class MangaDownloader:
     
     def download_images_from_chapter(self, chapter_link, series_name, chapter_number):
         try:
-            page_number = 1  # Initialize the page number
-            long_screenshot_taken = False  # Initialize the long screenshot flag
-            
-            self.check_value_none(chapter_link) # Check if the chapter link is None
-
-            sanitized_folder_name = self.file_operations.sanitize_folder_name(
-                series_name)
-            save_path = os.path.join(
-                self.save_path, sanitized_folder_name, str(chapter_number))
-
-            # Check if the folder for the chapter already exists, if so, exit
+            save_path = self.prepare_save_path(series_name, chapter_number)
             if os.path.exists(save_path):
                 logger.warning(
                     f"Folder for {chapter_number} already exists. Exiting.")
                 return
-            
-            else:
-                # Navigate to the chapter link
-                self.web_interactions.naviguate(chapter_link)
-                time.sleep(3)  # Wait for the page to load
-                print("Waiting for chapter to load...")
-                previous_chapter_id = self.extract_chapter_id(
-                    chapter_link)  # Get the initial chapter ID from the URL
-                
-                # Check if it's a long manga
-                is_long_manga = Config.LONG_MANGA_IMAGE in self.web_interactions.check_element_exists()
-                
-                while True:
-                    try:
-                        if previous_chapter_id is None:
-                            logger.error(
-                                "Previous chapter ID is None. Exiting.") # Error handling
-                            return
 
-                        if previous_chapter_id != self.extract_chapter_id(self.web_interactions.driver.current_url) and not is_long_manga:
-                            logger.info("Chapter completed.") # Error handling
-                            return
+            self.navigate_to_chapter(chapter_link)
+            previous_chapter_id = self.extract_chapter_id(chapter_link)
+            is_long_manga = Config.LONG_MANGA_IMAGE in self.web_interactions.check_element_exists()
 
-                        if Config.LONG_MANGA_IMAGE in self.web_interactions.check_element_exists() and not long_screenshot_taken:
-                            long_screenshot_taken = True # Set the long screenshot boolean variable to True to prevent taking another long screenshot
-
-                            # Process long manga differently
-                            self.file_operations.save_long_screenshot(
-                                self.web_interactions.driver, self.save_path, series_name, chapter_number, None)
-                            break
-
-                        elif not is_long_manga:
-                            # Press the right arrow key to go to the next page for small manga
-                            element_exists_result = self.web_interactions.check_element_exists()
-                            
-                            if element_exists_result:
-                                self.process_page(
-                                    page_number, previous_chapter_id, series_name, chapter_number)
-                            else:
-                                # Handle the case where the result is None
-                                logger.warning("Element does not exist.")
-                                break
-
-                    except StopIteration:
-                        break
-                    finally:
-                        if not is_long_manga:
-                            page_number += 1  # Increment the page number for small manga
-
+            self.process_chapter(is_long_manga, previous_chapter_id, series_name, chapter_number)
 
         except NoSuchElementException as e:
             logger.error(f"Element not found: {e}")
@@ -344,6 +291,51 @@ class MangaDownloader:
             logger.critical(f"Critical error: {e}")
         finally:
             pass
+
+    def prepare_save_path(self, series_name, chapter_number):
+        sanitized_folder_name = self.file_operations.sanitize_folder_name(series_name)
+        return os.path.join(self.save_path, sanitized_folder_name, str(chapter_number))
+
+    def navigate_to_chapter(self, chapter_link):
+        self.web_interactions.driver.get(chapter_link)
+        time.sleep(3)  # Wait for the page to load
+
+    def process_chapter(self, is_long_manga, previous_chapter_id, series_name, chapter_number):
+        page_number = 1
+        long_screenshot_taken = False
+
+        while True:
+            try:
+                if previous_chapter_id is None:
+                    logger.error("Previous chapter ID is None. Exiting.")
+                    return
+
+                if previous_chapter_id != self.extract_chapter_id(self.web_interactions.driver.current_url) and not is_long_manga:
+                    logger.info("Chapter completed.")
+                    return
+
+                if Config.LONG_MANGA_IMAGE in self.web_interactions.check_element_exists() and not long_screenshot_taken:
+                    long_screenshot_taken = True
+                    self.file_operations.save_long_screenshot(
+                        self.web_interactions.driver, self.save_path, series_name, chapter_number, None)
+                    break
+
+                elif not is_long_manga:
+                    element_exists_result = self.web_interactions.check_element_exists()
+
+                    if element_exists_result:
+                        self.process_page(
+                            page_number, previous_chapter_id, series_name, chapter_number)
+                    else:
+                        logger.warning("Element does not exist.")
+                        break
+
+            except StopIteration:
+                break
+            finally:
+                if not is_long_manga:
+                    page_number += 1
+
 
     def process_page(self, page_number, previous_chapter_id, series_name, chapter_number):
         # Wait for the pages wrap element to load
@@ -359,10 +351,10 @@ class MangaDownloader:
 
         while True:
             if config == Config.MANGA_IMAGE:
-                self.web_interactions.wait_until_image_loaded()
+                img_src = self.web_interactions.wait_until_image_loaded()
                 # Save a screenshot of the page
                 self.file_operations.take_screenshot(
-                    self.web_interactions.driver, self.save_path, series_name, chapter_number, page_number)
+                    self.web_interactions.driver, self.save_path, series_name, chapter_number, page_number, img_src)
                 # For small manga, proceed with arrow key press
                 ActionChains(self.web_interactions.driver).send_keys(
                     Keys.ARROW_RIGHT).perform()
