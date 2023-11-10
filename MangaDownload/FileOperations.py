@@ -153,7 +153,7 @@ class FileOperations:
             img_data = self.get_image_data(driver, img_src) # Get the image data from the image source (blob URL)
             if img_data:
                 try:
-                    file_name = f"page_{page_number}.png"
+                    file_name = self.create_screenshot_filename(page_number)  # Create the screenshot filename
                     # Save the screenshot
                     self.save_image(img_data, folder_path, file_name, page_number)
                 except Exception as e:
@@ -238,7 +238,7 @@ class FileOperations:
                     index = i + 1
                     if img_data:  
                         # Create the file name (e.g. page_1.png)
-                        file_name = f"page_{index}.png"
+                        file_name = self.create_screenshot_filename(index)
                         # Save the image
                         self.save_image(img_data,
                                         folder_path, file_name, index)
@@ -317,9 +317,9 @@ class FileOperations:
         for i in range(0, height, chunk_height):
             box = (0, i, width, min(i + chunk_height, height))
             chunk = img.crop(box)
-
+            file_name_removed_extension = file_name.split('.')[0]
             # Save each chunk with a unique file name
-            chunk_file_name = f"part_{i // chunk_height}_{file_name}"
+            chunk_file_name = f"{file_name_removed_extension}_part_{i // chunk_height}.png"
             with open(os.path.join(folder_path, chunk_file_name), 'wb') as file:
                 # Save the image chunk
                 chunk.save(file)
