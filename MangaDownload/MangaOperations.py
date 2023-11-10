@@ -365,8 +365,7 @@ class MangaDownloader:
                 self.file_operations.take_screenshot(
                     self.web_interactions.driver, self.save_path, series_name, chapter_number, page_number, img_src)
                 # For small manga, proceed with arrow key press
-                ActionChains(self.web_interactions.driver).send_keys(
-                    Keys.ARROW_RIGHT).perform()
+                self.web_interactions.press_right_arrow_key()
             elif config == None:
                 print("No manga image found")
                 return

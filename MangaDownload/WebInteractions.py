@@ -43,7 +43,9 @@ class WebInteractions:
             return False
         # Button is enabled, return True
         return True
-
+    def press_right_arrow_key(self):
+        ActionChains(self.driver).send_keys(
+                    Keys.ARROW_RIGHT).perform()
     def click_next_page(self):
         try:
 
@@ -64,7 +66,7 @@ class WebInteractions:
         except Exception as e:
             logger.error(f"Error clicking next page button: {e}")
             return False
-
+    
     def wait_for_next_page(self):
         WebDriverWait(self.driver, 10).until(
             EC.presence_of_all_elements_located(
