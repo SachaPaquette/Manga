@@ -156,7 +156,7 @@ class WebInteractions:
         try:
             # Check if the popup is present
             popup = self.find_single_element(
-                By.CLASS_NAME, Config.POPUP, None)
+                By.CLASS_NAME, Config.POP_UP, None)
 
             # Find all buttons in the popup
             buttons = self.find_multiple_elements(

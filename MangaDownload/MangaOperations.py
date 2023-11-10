@@ -307,7 +307,20 @@ class MangaDownloader:
         time.sleep(3)  # Wait for the page to load
         self.web_interactions.wait_until_element_loaded(By.CSS_SELECTOR, 'body')
 
+
     def process_chapter(self, is_long_manga, previous_chapter_id, series_name, chapter_number):
+        """
+        Process a chapter of a manga.
+
+        Args:
+            is_long_manga (bool): A boolean indicating whether the manga is long or not.
+            previous_chapter_id (int): The ID of the previous chapter.
+            series_name (str): The name of the manga series.
+            chapter_number (int): The number of the chapter.
+
+        Returns:
+            None
+        """
         # Initialize the page number and long screenshot taken variables
         page_number = 1
         long_screenshot_taken = False
@@ -347,56 +360,120 @@ class MangaDownloader:
 
 
     def process_page(self, page_number, previous_chapter_id, series_name, chapter_number):
-        # Wait for the pages wrap element to load
-        self.web_interactions.wait_until_page_loaded()
+        """
+        Processes a single page of a manga chapter.
+
+        Args:
+            page_number (int): The page number to process.
+            previous_chapter_id (str): The ID of the previous chapter in the series.
+            series_name (str): The name of the manga series.
+            chapter_number (int): The number of the chapter being processed.
+        """
+        try:
+            # Wait for the pages wrap element to load
+            self.web_interactions.wait_until_page_loaded()
+
+            while True:
+                config = self.web_interactions.check_element_exists()
+                if config == Config.MANGA_IMAGE:
+                    self.process_manga_image(page_number, series_name, chapter_number, previous_chapter_id)
+                elif config is None:
+                    print("No manga image found")
+                    return
+                else:
+                    print("Error")
+                    if not self.handle_error():
+                        break
+
+        except StopIteration:
+            pass
+
+
+    def process_manga_image(self, page_number, series_name, chapter_number, previous_chapter_id):
+        """
+        Processes a manga image by waiting for it to load, extracting its source URL, and saving the page information.
+        If the chapter has ended, the method raises a StopIteration exception to signal the end of the chapter.
+        If the URL does not change after pressing the right arrow key, the method raises a StopIteration exception to stop the process.
+        
+        Args:
+            page_number (int): The current page number.
+            series_name (str): The name of the manga series.
+            chapter_number (int): The current chapter number.
+            previous_chapter_id (str): The ID of the previous chapter.
+        """
         # Get the URL before pressing the right arrow key
         before_url = self.web_interactions.driver.current_url
-
-        # Check if it's a long manga
-        config = self.web_interactions.check_element_exists()
 
         error_count = 0  # Initialize error count
         max_error_count = 3  # Set a maximum number of consecutive errors allowed
 
         while True:
-            if config == Config.MANGA_IMAGE:
-                img_src = self.web_interactions.wait_until_image_loaded()
-                # Save a screenshot of the page
-                self.file_operations.take_screenshot(
-                    self.web_interactions.driver, self.save_path, series_name, chapter_number, page_number, img_src)
+            img_src = self.web_interactions.wait_until_image_loaded()
+            if img_src:
+                self.process_page_info(page_number, series_name, chapter_number, img_src)
                 # For small manga, proceed with arrow key press
                 self.web_interactions.press_right_arrow_key()
-            elif config == None:
-                print("No manga image found")
-                return
-            else:
-                print("Error")
-                error_count += 1  # Increment error count
-                if error_count >= max_error_count:
-                    print(f"Exceeded maximum consecutive errors ({max_error_count}). Exiting.")
+
+                # Get the current chapter ID after the arrow key press
+                current_chapter_id = self.extract_chapter_id(self.web_interactions.driver.current_url)
+
+                # Check if the chapter ID has changed (i.e., the chapter has ended)
+                if current_chapter_id != previous_chapter_id:
+                    logger.info("Chapter completed.")
+                    self.file_operations.delete_last_page(self.save_path, series_name, chapter_number, page_number)
                     raise StopIteration
-                continue
 
-            # Get the current chapter ID after the arrow key press
-            current_chapter_id = self.extract_chapter_id(
-                self.web_interactions.driver.current_url)
+                # Check if the URL has changed after pressing the right arrow key
+                if self.web_interactions.driver.current_url == before_url:
+                    logger.error("URL did not change after pressing the right arrow key. Stopping.")
+                    # Popup is present on the page
+                    self.web_interactions.dismiss_popup_if_present()
+                    raise StopIteration
 
-            # Check if the chapter ID has changed (i.e., the chapter has ended)
-            if current_chapter_id != previous_chapter_id:
-                logger.info("Chapter completed.")
-                self.file_operations.delete_last_page(
-                    self.save_path, series_name, chapter_number, page_number)
-                raise StopIteration
-
-            # Check if the URL has changed after pressing the right arrow key
-            if self.web_interactions.driver.current_url == before_url:
-                logger.error(
-                    "URL did not change after pressing the right arrow key. Stopping.")
-                # Popup is present on the page
-                self.web_interactions.dismiss_popup_if_present()
-                raise StopIteration
+                page_number += 1
             else:
-                break
+                if not self.handle_error():
+                    break
+
+    def process_page_info(self, page_number, series_name, chapter_number, img_src):
+            """
+            Takes a screenshot of the current page and saves it to the specified directory.
+
+            Args:
+                page_number (int): The number of the current page.
+                series_name (str): The name of the manga series.
+                chapter_number (int): The number of the current chapter.
+                img_src (str): The source URL of the image to be saved.
+
+            Raises:
+                Exception: If there is an error saving the page information.
+            """
+            try:
+                self.file_operations.take_screenshot(
+                    self.web_interactions.driver, self.save_path, series_name, chapter_number, page_number, img_src)
+            except Exception as e:
+                logger.error(f"Error saving page information: {e}")
+
+
+    def handle_error(self):
+            """
+            Handles errors that occur during manga download.
+
+            If the number of consecutive errors exceeds a certain threshold, the method raises a StopIteration exception.
+
+            Returns:
+                True if the error was handled successfully.
+            """
+            error_count = 0  # Initialize error count
+            max_error_count = 3  # Set a maximum number of consecutive errors allowed
+
+            error_count += 1  # Increment error count
+            if error_count >= max_error_count:
+                print(f"Exceeded maximum consecutive errors ({max_error_count}). Exiting.")
+                raise StopIteration
+            return True
+
+
 
     def search_and_select_manga(self):
         # Ask the user to enter the name of the manga

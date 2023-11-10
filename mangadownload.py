@@ -37,7 +37,7 @@ def print_chapter_info(chapter):
     """
     Print the chapter number and name.
     """
-    print(f"{chapter['chapter_number']}, {chapter['chapter_name']}")
+    print(f"{chapter['chapter_number']}, {chapter['chapter_name']}, {chapter['chapter_link']}")
 
 def cleanup_resources(web_interactions):
     """
