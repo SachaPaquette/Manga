@@ -166,7 +166,7 @@ class WebInteractions:
         except NoSuchElementException:
             pass  # No popup found, continue with the normal flow
 
-    def check_element_exists(self, max_retries=3):
+    def check_element_exists(self, max_retries=6):
         try:
             retries = 0
 

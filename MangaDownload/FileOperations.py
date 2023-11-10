@@ -159,7 +159,22 @@ class FileOperations:
                 except Exception as e:
                     logger.error(f"Error saving image: {e}")
                     raise
+    def get_all_nodes(self, driver, css_selector):
+        """Function to get all nodes in a page, including hidden ones.
 
+        Args:
+            driver (WebDriver): The Selenium WebDriver instance.
+            css_selector (str): The CSS selector to match the nodes.
+
+        Returns:
+            List[str]: The outerHTML of all matched nodes.
+        """
+        script = f"""
+        var nodes = document.querySelectorAll('{css_selector}');
+        var arr = Array.from(nodes);
+        return arr.map(node => node.outerHTML);
+        """
+        return driver.execute_script(script)
 
     def find_parent_div(self, driver):
         """Function to find the parent div in a long manga page. A long manga page is a single page that contains all of the chapter.
@@ -175,20 +190,22 @@ class FileOperations:
         # Find the parent div
         parent_div = WebDriverWait(driver, 30).until(
             EC.presence_of_element_located((By.CLASS_NAME, Config.LONG_MANGA_PARENT_DIV)))
-        
+        sub_divs_html = self.get_all_nodes(driver, Config.LONG_MANGA_SUBDIV)
+        for sub_div_html in sub_divs_html:
+            logger.info(f"Sub div outerHTML: {sub_div_html}")
         # log all of the sub div class name of the parent_div
         sub_divs = parent_div.find_elements(By.XPATH, ".//*")
-        for sub_div in sub_divs:
-            logger.info(f"Sub div class name: {sub_div.get_attribute('class')}")
-        
-        # Wait until there are no more elements with class name 'unloaded mx-auto' and 'flex justify-center items-center p-2 text-primary overflow-hidden w-full mx-auto'
+
+        # Wait until all sub-divs are loaded, including hidden ones
         while True:
             unloaded_elements = parent_div.find_elements(By.CSS_SELECTOR, '.unloaded.mx-auto')
-            #flex_elements = parent_div.find_elements(By.CSS_SELECTOR, '.flex.justify-center.items-center.p-2.text-primary.overflow-hidden.w-full.mx-auto')
             if not unloaded_elements:
                 break
             time.sleep(1)
             parent_div = driver.find_element(By.CLASS_NAME, Config.LONG_MANGA_PARENT_DIV)
+            sub_divs = parent_div.find_elements(By.XPATH, ".//*")
+            # Access sub_divs to avoid Pylance warning
+            _ = sub_divs
         return parent_div
         
 
