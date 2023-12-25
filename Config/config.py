@@ -51,3 +51,5 @@ class Config:
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 OPR/77.0.4054.254",
     ]  # List of user agents to rotate through
     MANGA_FETCH_LOG_PATH = "./Logs/MangaFetch.log" # Path to the log file
+    
+    DEFAULT_SAVE_PATH = "./Manga" # Default save path for the manga (Will be used if no save path is configured in the .env file)

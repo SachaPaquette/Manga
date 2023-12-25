@@ -30,9 +30,13 @@ class MangaDownloader:
         # Initialize the WebDriver instance, save path and logger
         self.web_interactions = web_interactions if web_interactions else WebInteractions()
         self.file_operations = file_operations if file_operations else FileOperations(self.web_interactions)
-        
-        self.save_path = os.getenv("SAVE_PATH")
-
+        # Configure the save path
+        if os.getenv("SAVE_PATH") is not None:
+            self.save_path = os.getenv("SAVE_PATH")
+        else:
+            print("SAVE_PATH environment variable not found. Using default path.")
+            self.save_path = Config.DEFAULT_SAVE_PATH
+            print(f"Using default save path to save mangas: {self.save_path}")
 
 
  
@@ -76,7 +80,9 @@ class MangaDownloader:
             logger.error(f"Error fetching chapters: {e}")
             raise
         finally:
-            return chapters_array
+            # Check if there are chapters to return
+            if chapters_array:
+                return chapters_array
 
 
     def process_chapter_cards(self, chapter_cards):
@@ -90,25 +96,28 @@ class MangaDownloader:
             Returns:
                 tuple: A tuple containing the array of chapter info objects and the number of the first chapter.
             """
-            chapters_array = []
-            first_chapter_number = None
-            for chapter in chapter_cards:
-                try:
-                    # Extract the chapter info from the chapter card
-                    chapter_info = self.extract_chapter_info(chapter)
+            try:
+                chapters_array = []
+                first_chapter_number = None
+                for chapter in chapter_cards:
+                    try:
+                        # Extract the chapter info from the chapter card
+                        chapter_info = self.extract_chapter_info(chapter)
 
-                    if chapter_info:
-                        print(
-                            f"Fetched: {chapter_info['chapter_number']}, {chapter_info['chapter_name']}")
-                        # Append the chapter info to the array
-                        chapters_array.append(chapter_info)
-                        # Get the chapter number of the first chapter
-                        if first_chapter_number is None:
-                            first_chapter_number = chapter_info['chapter_number']
-                except NoSuchElementException as e:
-                    logger.error(f"Error while fetching chapter: {e}")
-            return chapters_array, first_chapter_number
-
+                        if chapter_info:
+                            print(
+                                f"Fetched: {chapter_info['chapter_number']}, {chapter_info['chapter_name']}")
+                            # Append the chapter info to the array
+                            chapters_array.append(chapter_info)
+                            # Get the chapter number of the first chapter
+                            if first_chapter_number is None:
+                                first_chapter_number = chapter_info['chapter_number']
+                    except NoSuchElementException as e:
+                        logger.error(f"Error while fetching chapter: {e}")
+                return chapters_array, first_chapter_number
+            except Exception as e:
+                logger.error(f"Error processing chapter cards: {e}")
+                raise
     def unsupported_website(self, link):
             """
             Checks if the given link is from the mangaplus website, which is not supported due to its different layout.
@@ -492,39 +501,47 @@ class MangaDownloader:
     
 
     def search_and_select_manga(self):
-        # Ask the user to enter the name of the manga
-        name = input("Enter the name of the manga: ")
-        mangas = find_mangas(name)  # Search for the manga
-        mangas = self.find_mangas_name(name)
-        
-        if mangas:
-            print("Search results:")
-            for i, manga in enumerate(mangas):
-                print(f"{i + 1}. {manga['title']}")  # Print the manga titles
+        try:
+            # Ask the user to enter the name of the manga
+            name = input("Enter the name of the manga: ")
+            mangas = find_mangas(name)  # Search for the manga
+            mangas = self.find_mangas_name(name)
+            
+            if mangas:
+                print("Search results:")
+                for i, manga in enumerate(mangas):
+                    print(f"{i + 1}. {manga['title']}")  # Print the manga titles
 
-            selected_index = input(
-                "Enter the number of the manga you want to download (or '0' to exit): ")  # Ask the user to select a manga
+                selected_index = input(
+                    "Enter the number of the manga you want to download (or '0' to exit): ")  # Ask the user to select a manga
 
-            if selected_index == '0':
-                print("Exiting.")
-                return (), ""  # Return an empty tuple and an empty string
+                if selected_index == '0':
+                    print("Exiting.")
+                    return (), ""  # Return an empty tuple and an empty string
 
-            if selected_index.isdigit() and 0 <= int(selected_index) <= len(mangas):
-                # Get the selected manga
-                selected_manga = mangas[int(selected_index) - 1]
-                print(
-                    f"You selected: {selected_manga['title']}")
-                # Fetch all the chapters for the selected manga
-                all_chapters = self.fetch_chapters(selected_manga['link'])
-                print("Done.")
-                # Return the chapters and the name of the manga
-                return all_chapters, selected_manga['title']
+                if selected_index.isdigit() and 0 <= int(selected_index) <= len(mangas):
+                    # Get the selected manga
+                    selected_manga = mangas[int(selected_index) - 1]
+                    print(
+                        f"You selected: {selected_manga['title']}")
+                    # Fetch all the chapters for the selected manga
+                    all_chapters = self.fetch_chapters(selected_manga['link'])
+                    print("Done.")
+                    # Return the chapters and the name of the manga
+                    return all_chapters, selected_manga['title']
+                else:
+                    # make the user re-enter the number
+                    print("Invalid number. Please enter a valid number.")
+                    return self.search_and_select_manga()
             else:
-                # make the user re-enter the number
-                print("Invalid number. Please enter a valid number.")
-                return self.search_and_select_manga()
-        else:
-            print("No manga found. Please try again\n")
+                print("No manga found. Please try again\n")
 
-            # make the user re-enter the name of the manga
-            return self.search_and_select_manga()
+                # make the user re-enter the name of the manga
+                return self.search_and_select_manga()
+        except Exception as e:
+            logger.error(f"Error searching and selecting manga: {e}")
+            raise
+        except KeyboardInterrupt as e:
+            # Clean up the resources used by the program
+            self.web_interactions.cleanup()            
+            raise
