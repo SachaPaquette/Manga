@@ -11,7 +11,7 @@ from Driver.driver_config import driver_setup
 logger = setup_logging('manga_fetch', Config.MANGA_FETCH_LOG_PATH)
 
 
-def format_manga_url(page_number):
+def format_manga_url(manga_name):
     """
     Formats the manga url with the given page number.
 
@@ -22,7 +22,7 @@ def format_manga_url(page_number):
         str: The formatted manga url.
     """
     # Format the manga url with the page number
-    return Config.MANGADEX_BASE_URL.format(page_number)
+    return Config.MANGADEX_SEARCH_URL.format(manga_name)
 
 
 def navigate_to_manga_url(driver, manga_url):
@@ -64,7 +64,7 @@ def find_manga_cards(driver):
     return driver.find_elements(by=By.CLASS_NAME, value='manga-card')
 
 
-def fetch_manga_cards(driver, page_number):
+def fetch_manga_cards(driver, manga_name):
     """
     Fetches manga cards from a given page number.
 
@@ -75,7 +75,7 @@ def fetch_manga_cards(driver, page_number):
     Returns:
         A list of manga cards found on the page.
     """
-    manga_url = format_manga_url(page_number)  # Format the manga url
+    manga_url = format_manga_url(manga_name)  # Format the manga url
     navigate_to_manga_url(driver, manga_url)  # Navigate to the manga url
     wait_for_page_to_load(driver)  # Wait for the page to load
     manga_cards = find_manga_cards(driver)  # Find the manga cards on the page
@@ -211,7 +211,7 @@ def extract_manga_info(manga_card):
         return None
 
 
-def fetch_and_process_manga_cards(driver, page_number):
+def fetch_and_process_manga_cards(driver, manga_name):
     """
     Fetches manga cards from a given page number and processes them to extract manga info.
     Also creates a progress bar for the manga cards.
@@ -222,11 +222,11 @@ def fetch_and_process_manga_cards(driver, page_number):
     Returns:
         A list of dictionaries containing manga info.
     """
-    manga_cards = fetch_manga_cards(driver, page_number)
+    manga_cards = fetch_manga_cards(driver, manga_name)
     manga_array = []
 
     # Create a progress bar for the manga cards
-    for manga_card in tqdm(manga_cards, desc=f"Processing page {page_number}", unit="manga"):
+    for manga_card in manga_cards:
         manga_info = extract_manga_info(manga_card)  # Extract the manga info
         if manga_info:  # Check if the manga info is not None
             # Append the manga info to the manga array

@@ -13,6 +13,7 @@ from Config.config import Config
 from Config.logs_config import setup_logging
 from MangaDownload.FileOperations import FileOperations
 from MangaDownload.WebInteractions import WebInteractions
+from MangaFetch.FetchOperations import fetch_and_process_manga_cards
 from MangaDownload.WebInteractions import logger
 
 class MangaDownloader:
@@ -29,6 +30,7 @@ class MangaDownloader:
         # Initialize the WebDriver instance, save path and logger
         self.web_interactions = web_interactions if web_interactions else WebInteractions()
         self.file_operations = file_operations if file_operations else FileOperations(self.web_interactions)
+        
         self.save_path = os.getenv("SAVE_PATH")
 
 
@@ -473,13 +475,28 @@ class MangaDownloader:
                 raise StopIteration
             return True
 
-
+    def find_mangas_name(self, name):
+        try:
+            # Navigate to the mangadex website with the search query
+           
+            # Find all the manga titles corresponding to the input
+            # Return the manga titles and their links
+            
+            # If no manga titles are found, return None
+            
+            # If an error occurs, raise an exception
+            return fetch_and_process_manga_cards(self.web_interactions.driver, name)
+        except Exception as e:
+            logger.error(f"Error finding mangas: {e}")
+            raise
+    
 
     def search_and_select_manga(self):
         # Ask the user to enter the name of the manga
         name = input("Enter the name of the manga: ")
         mangas = find_mangas(name)  # Search for the manga
-
+        mangas = self.find_mangas_name(name)
+        
         if mangas:
             print("Search results:")
             for i, manga in enumerate(mangas):
