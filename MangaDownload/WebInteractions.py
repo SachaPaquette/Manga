@@ -153,56 +153,71 @@ class WebInteractions:
 
 
     def dismiss_popup_if_present(self):
-        try:
-            # Check if the popup is present
-            popup = self.find_single_element(
-                By.CLASS_NAME, Config.POP_UP, None)
+            """
+            Dismisses a popup if it is present on the current page.
 
-            # Find all buttons in the popup
-            buttons = self.find_multiple_elements(
-                By.TAG_NAME, 'button', popup)
+            If a popup is present, this method will find the "Continue" button and click it to dismiss the popup.
+            If no popup is present, this method will do nothing and continue with the normal flow.
+            """
+            try:
+                # Check if the popup is present
+                popup = self.find_single_element(
+                    By.CLASS_NAME, Config.POP_UP, None)
 
-            # Filter the button with text "Continue" and click it
-            continue_button = next(
-                (button for button in buttons if 'Continue' in button.text), None)
-            if continue_button:
-                continue_button.click()
-        except NoSuchElementException:
-            pass  # No popup found, continue with the normal flow
+                # Find all buttons in the popup
+                buttons = self.find_multiple_elements(
+                    By.TAG_NAME, 'button', popup)
+
+                # Filter the button with text "Continue" and click it
+                continue_button = next(
+                    (button for button in buttons if 'Continue' in button.text), None)
+                if continue_button:
+                    continue_button.click()
+            except NoSuchElementException:
+                pass  # No popup found, continue with the normal flow
 
     def check_element_exists(self, max_retries=6):
-        try:
-            retries = 0
+            """
+            Check if the manga image element exists on the page.
 
-            while retries < max_retries:
-                try:
-                    # Wait for the page to load
-                    self.wait_until_page_loaded()
+            Args:
+                max_retries (int): The maximum number of times to retry finding the element.
 
-                    # Check if the manga image is present
-                    manga_images = self.find_multiple_elements(By.CLASS_NAME, Config.MANGA_IMAGE, None)
-                    long_manga_images = self.find_multiple_elements(By.CLASS_NAME, Config.LONG_MANGA_IMAGE, None)
+            Returns:
+                str: The name of the manga image element if it exists, otherwise False.
+            """
+            try:
+                retries = 0
 
-                    if manga_images:
-                        return Config.MANGA_IMAGE
-                    elif long_manga_images:
-                        return Config.LONG_MANGA_IMAGE
-                    else:
-                        raise NoSuchElementException("Manga image not found")
+                while retries < max_retries:
+                    try:
+                        # Wait for the page to load
+                        self.wait_until_page_loaded()
 
-                    retries += 1
+                        # Check if the manga image is present
+                        manga_images = self.find_multiple_elements(By.CLASS_NAME, Config.MANGA_IMAGE, None)
+                        long_manga_images = self.find_multiple_elements(By.CLASS_NAME, Config.LONG_MANGA_IMAGE, None)
 
-                except TimeoutException:
-                    # Handle timeout exception, e.g., log an error message
-                    print("Timeout waiting for page to load.")
-                    time.sleep(2)
-                    retries += 1
+                        if manga_images:
+                            return Config.MANGA_IMAGE
+                        elif long_manga_images:
+                            return Config.LONG_MANGA_IMAGE
+                        else:
+                            raise NoSuchElementException("Manga image not found")
 
-            print("Element not found after maximum retries.")
-            return False  # Element not found
+                        retries += 1
 
-        except NoSuchElementException as e:
-            logger.error(f"Error while checking if element exists: {e}")
+                    except TimeoutException:
+                        # Handle timeout exception, e.g., log an error message
+                        print("Timeout waiting for page to load.")
+                        time.sleep(2)
+                        retries += 1
+
+                print("Element not found after maximum retries.")
+                return False  # Element not found
+
+            except NoSuchElementException as e:
+                logger.error(f"Error while checking if element exists: {e}")
             
 
     def naviguate(self, url):
