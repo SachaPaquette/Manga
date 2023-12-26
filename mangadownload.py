@@ -62,10 +62,16 @@ def main():
                 print_chapter_info(chapter) # Print the chapter number and name
                 download_chapter_images(manga_downloader, chapter, series_name) # Download the images from the chapter
         cleanup_resources(web_interactions) # Clean up the resources used by the program
+    
+        
     except KeyboardInterrupt as e:
+        cleanup_resources(web_interactions)
         print("\nQuitting...")
+        exit()
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
+    finally:
+        cleanup_resources(web_interactions)
 
 if __name__ == "__main__":
     main() # Run the main function

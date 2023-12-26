@@ -33,8 +33,8 @@ class Config:
     LONG_MANGA_IMAGE = "md--page.ls.limit-width.mx-auto" # Class name of the long manga image
     MANGA_DOWNLOAD_LOG_PATH = "./Logs/MangaDownload.log" # Path to the log file
     UNLOADED_SUB_DIV = ".unloaded.mx-auto" # Class name of the unloaded sub div
-    
-
+    # MangaDex search URL (exclude Doujinshi mangas that are fan-made)
+    MANGADEX_SEARCH_URL = "https://mangadex.org/titles?q={}&page=1&exclude=b13b2a48-c720-44a9-9c77-39c9979373fb"
     ##############################
     #        mangafetch.py       #
     #        constants           #
@@ -51,3 +51,5 @@ class Config:
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 OPR/77.0.4054.254",
     ]  # List of user agents to rotate through
     MANGA_FETCH_LOG_PATH = "./Logs/MangaFetch.log" # Path to the log file
+    
+    DEFAULT_SAVE_PATH = "./Manga" # Default save path for the manga (Will be used if no save path is configured in the .env file)

@@ -60,6 +60,3 @@ Make sure you have the following installed:
 6. The script will fetch and download all chapters for the selected manga.
 
 7. After downloading manga chapters, the script will automatically clean up resources and close the browser.
-
-
-8. After downloading manga chapters, the script will automatically clean up resources and close the browser.

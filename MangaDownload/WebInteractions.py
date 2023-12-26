@@ -27,9 +27,19 @@ class WebInteractions:
         self.last_loaded_img_src = None  # Store the last loaded image source
 
     def cleanup(self):
-        self.driver.quit()  # Close the browser window
-        print("Resources cleaned up.")
-
+        try:
+            self.driver.close()  # Close the current tab
+            
+            print("Resources cleaned up.")
+        except NoSuchWindowException:
+            print("No such window exception while cleaning up resources.")
+        except InvalidSessionIdException:
+            print("Invalid session ID exception while cleaning up resources.")
+        except WebDriverException:
+            print("Web driver exception while cleaning up resources.")
+        except Exception as e:
+            print(f"Error while cleaning up resources: {e}")
+            
     def is_button_clickable(self, button):
         # current button layout is button > span > svg - we currently have the svg element
         span_element = button.find_element(
