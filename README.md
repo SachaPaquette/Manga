@@ -9,7 +9,6 @@ Make sure you have the following installed:
 - Python 3
 - Chrome Browser
 - ChromeDriver (automatically managed by ChromeDriverManager)
-- MongoDB
 
 ## Usage
 
@@ -33,22 +32,15 @@ Make sure you have the following installed:
 
 4. **Configuration:**
 
-    Create a `.env` file in the project root and add the following environment variables:
+    Create a `.env` file in the project root and add the following environment variable:
 
     ```env
-    MONGODB_CONNECTION_STRING = "YOUR_MONGODB_CONNECTION"
     SAVE_PATH=/path/to/save/manga
     ```
 
     Replace `/path/to/save/manga` with the desired path to save manga images.
-    Replace `YOUR_MONGODB_CONNECTION` with your MongoDB connection string.
 
-5. **Run the scripts:**
-
-    ```bash
-    python mangafetch.py
-    ```
-    - Enter "Y" to start fetching the manga names and inserting them into your database.
+5. **Run the script:**
 
     ```bash
     python mangadownload.py
