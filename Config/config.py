@@ -53,3 +53,10 @@ class Config:
     MANGA_FETCH_LOG_PATH = "./Logs/MangaFetch.log" # Path to the log file
     
     DEFAULT_SAVE_PATH = "./Manga" # Default save path for the manga (Will be used if no save path is configured in the .env file)
+class ScriptConfig:
+    windows_script = "./Scripts/windowsinstaller.ps1"
+    linux_script = "./Scripts/linuxinstaller.sh"
+    requirements_file = "./Requirements/requirements.txt"
+    SCRIPT_FILENAME = "installer"
+    SCRIPT_LOG_PATH = "./Logs/Installer.log"
+    windows_curse = "windows-curses"

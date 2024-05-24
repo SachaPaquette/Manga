@@ -19,6 +19,7 @@ def instantiate_classes():
     file_operations = FileOperations(web_interactions, web_interactions.driver)
     manga_downloader = MangaDownloader(web_interactions, file_operations)
     return web_interactions, file_operations, manga_downloader
+
 def get_manga_chapters_and_name(manga_downloader):
     """
     Search and select a manga.

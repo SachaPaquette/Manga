@@ -9,7 +9,6 @@ from selenium.common.exceptions import ElementClickInterceptedException, NoSuchE
 from dotenv import load_dotenv
 import time
 import requests
-from database import find_mangas
 from Config.config import Config
 import re
 import json
@@ -85,15 +84,18 @@ class WebInteractions:
 
     def wait_for_chapter_cards(self):
         try:
-            # Wait for the chapter cards to load and be visible
-            WebDriverWait(self.driver, 20).until(
-                EC.presence_of_all_elements_located(
-                    (By.CLASS_NAME, Config.CHAPTER_CARDS))
-            )
-            WebDriverWait(self.driver, 20).until(
-                EC.visibility_of_all_elements_located(
-                    (By.CLASS_NAME, Config.CHAPTER_CARDS))
-            )
+            while True:
+                # Wait for the chapter cards to load and be visible
+                WebDriverWait(self.driver, 20).until(
+                    EC.presence_of_all_elements_located(
+                        (By.CLASS_NAME, Config.CHAPTER_CARDS))
+                )
+                
+                
+                break
+        except TimeoutException:
+            logger.error("Timed out waiting for chapter cards to load")
+            raise
         except NoSuchElementException as e:
             logger.error(f"No such element exception for chapter cards: {e}")
             raise
@@ -114,10 +116,11 @@ class WebInteractions:
         None
         """
         try:
-            WebDriverWait(self.driver, 10).until(
+            WebDriverWait(self.driver, 2).until(
                 EC.presence_of_element_located(
                     (By.CLASS_NAME, Config.PAGE_WRAP))
             )
+            
         except TimeoutException:
             logger.error("Timed out waiting for page to load")
 
@@ -200,7 +203,7 @@ class WebInteractions:
                     else:
                         raise NoSuchElementException("Manga image not found")
 
-                    retries += 1
+                    
 
                 except TimeoutException:
                     # Handle timeout exception, e.g., log an error message
@@ -226,9 +229,8 @@ class WebInteractions:
                 Exception: If an error occurs while navigating to the specified URL.
             """
             try:
-                self.driver.get(url)
-                self.wait_until_page_loaded()
-                
+                self.driver.get(url)   
+                self.wait_until_page_loaded()   
             except Exception as e:
                 logger.error(f"Error while navigating to {url}: {e}")
                 

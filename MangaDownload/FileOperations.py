@@ -9,7 +9,6 @@ from selenium.common.exceptions import ElementClickInterceptedException, NoSuchE
 from dotenv import load_dotenv
 import time
 import requests
-from database import find_mangas
 import re
 import json
 from Config.config import Config
@@ -76,7 +75,7 @@ class FileOperations:
         Returns:
             string: The folder path.
         """
-        return os.path.join(save_path, sanitized_folder_name, str(chapter_number))
+        return os.path.join(save_path, sanitized_folder_name, chapter_number)
 
     def create_screenshot_filename(self, page_number):
         """Generate the screenshot filename. (eg: page_1.png)
@@ -118,7 +117,7 @@ class FileOperations:
         sanitized_folder_name = self.sanitize_folder_name(
             series_name)  # Sanitize the folder name
         folder_path = self.create_folder_path(
-            save_path, sanitized_folder_name, chapter_number)  # Create the folder path
+            save_path, sanitized_folder_name, "Chapter " + str(chapter_number))  # Create the folder path
 
         if not os.path.exists(folder_path):  # If the folder doesn't exist
             os.makedirs(folder_path)   # Create the folder if it doesn't exist
@@ -159,9 +158,13 @@ class FileOperations:
                     page_number)  # Create the screenshot filename
                 # Save the screenshot
                 self.save_image(img_data, folder_path, file_name, page_number)
+                return page_number + 1
             except Exception as e:
                 logger.error(f"Error saving image: {e}")
                 raise
+        else:
+            logger.error(f"Image data not found for page {page_number}")
+            return page_number
 
     def get_all_nodes(self, driver, css_selector):
         """Function to get all nodes in a page, including hidden ones.
@@ -190,7 +193,8 @@ class FileOperations:
         Returns:
             WebElement: The parent div element.
         """
-        time.sleep(10)
+        #time.sleep(10)
+        
         # Find the parent div
         parent_div = WebDriverWait(driver, 30).until(
             EC.presence_of_element_located((By.CLASS_NAME, Config.LONG_MANGA_PARENT_DIV)))
@@ -253,7 +257,6 @@ class FileOperations:
             sub_divs = self.find_sub_divs(driver)
 
             # Fetch all image data URLs
-            print(f"found {len(sub_divs)} sub-divs")
             """img_data_list = [self.get_image_data(driver, sub_div.find_element(
                 By.TAG_NAME, Config.IMG).get_attribute(Config.SRC)) for sub_div in sub_divs]"""
             img_data_list = [self.get_image_data(driver, self.web_interactions.find_single_element(
@@ -308,13 +311,9 @@ class FileOperations:
                 # Check the height of the image
                 img_height = img.size[1]
 
-                if img_height > 2000:
-                    # Split the image into chunks
-                    chunk_height = 2000
-                    self.split_image(img, folder_path, file_name, chunk_height)
-                else:
+                
                     # Save the image as-is
-                    self.write_image(image_data, folder_path, file_name)
+                self.write_image(image_data, folder_path, file_name)
             else:
                 logger.error(f"Image data not found for page {index}")
         except NoSuchWindowException:
@@ -421,7 +420,6 @@ class FileOperations:
 
     def get_image_data(self, driver, img_src):
         try:
-            print(f"Fetching image data for {img_src}")
             base64_data = self.fetch_base64_data(
                 driver, img_src)  # Fetch the base64 data
             base64_part = self.extract_base64_part(

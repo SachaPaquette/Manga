@@ -1,4 +1,6 @@
+import json
 import os
+import re
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -8,14 +10,12 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import  NoSuchElementException, TimeoutException
 from dotenv import load_dotenv
 import time
-from database import find_mangas
 from Config.config import Config
 from Config.logs_config import setup_logging
 from MangaDownload.FileOperations import FileOperations
 from MangaDownload.WebInteractions import WebInteractions
-from MangaFetch.FetchOperations import fetch_and_process_manga_cards
 from MangaDownload.WebInteractions import logger
-
+from MangaFetch.FetchOperations import fetch_and_process_manga_cards
 class MangaDownloader:
 
     def __init__(self, web_interactions=None, file_operations=None):
@@ -34,7 +34,7 @@ class MangaDownloader:
         if os.getenv("SAVE_PATH") is not None:
             self.save_path = os.getenv("SAVE_PATH")
         else:
-            print("SAVE_PATH environment variable not found. Using default path.")
+            print("SAVE_PATH environment variable not found.")
             self.save_path = Config.DEFAULT_SAVE_PATH
             print(f"Using default save path to save mangas: {self.save_path}")
 
@@ -55,17 +55,20 @@ class MangaDownloader:
 
         try:
             self.web_interactions.wait_for_chapter_cards()
-            time.sleep(3)  # Wait for the page to load
-
+            #time.sleep(3)  # Wait for the page to load
+            # Wait for the chapter cards to load
+            print("Chapter cards.")
             # Check if there are chapters on the page
             chapter_cards = self.web_interactions.driver.find_elements(
                 by=By.CLASS_NAME, value=Config.CHAPTER_CARDS)
-
+            print("Chapter cards loaded.")
             # Loop while there are still chapters to fetch
-            chapters_array, _ = self.process_chapter_cards(
+            
+            chapters_array = self.process_chapter_cards(
                 chapter_cards)
+            print("Chapters array")
             while True:  # Change the loop condition
-                print("Waiting for next page to load...")
+                #print("Waiting for next page to load...")
                 if not self.web_interactions.click_next_page():  # Check the return value
                     print("No next page. Stopping.")
                     break
@@ -76,6 +79,12 @@ class MangaDownloader:
                 # Process the chapter cards and append the results to the array
                 chapters_array += self.process_chapter_cards(chapter_cards)[0]
 
+            # Before returning the chapters, we want to add a chapter number to each chapter object in descending order
+            for i, chapter in enumerate(chapters_array):
+                # Modify the chapter number to be in descending order
+                chapter['chapter_number'] = len(chapters_array) - i
+                
+                
         except Exception as e:
             logger.error(f"Error fetching chapters: {e}")
             raise
@@ -98,7 +107,7 @@ class MangaDownloader:
             """
             try:
                 chapters_array = []
-                first_chapter_number = None
+                
                 for chapter in chapter_cards:
                     try:
                         # Extract the chapter info from the chapter card
@@ -106,15 +115,14 @@ class MangaDownloader:
 
                         if chapter_info:
                             print(
-                                f"Fetched: {chapter_info['chapter_number']}, {chapter_info['chapter_name']}")
+                                f"Fetched: {chapter_info['chapter_name']}")
                             # Append the chapter info to the array
                             chapters_array.append(chapter_info)
                             # Get the chapter number of the first chapter
-                            if first_chapter_number is None:
-                                first_chapter_number = chapter_info['chapter_number']
+                            
                     except NoSuchElementException as e:
                         logger.error(f"Error while fetching chapter: {e}")
-                return chapters_array, first_chapter_number
+                return chapters_array
             except Exception as e:
                 logger.error(f"Error processing chapter cards: {e}")
                 raise
@@ -133,32 +141,6 @@ class MangaDownloader:
             else:
                 return link
 
-    def find_chapter_number(self, chapter):
-        """
-        This function finds the chapter number from a given chapter element.
-
-        Parameters:
-        chapter (WebElement): A WebElement representing a chapter.
-
-        Returns:
-        chapter_number (WebElement): A WebElement representing the chapter number.
-        """
-
-        try:
-            # Find all div elements within the chapter element
-            nested_divs = chapter.find_elements(by=By.TAG_NAME, value=Config.DIV)
-
-            # Iterate over each div element
-            for nested_div in nested_divs:
-                # Find the chapter number within the div element
-                chapter_number = nested_div.find_element(by=By.CLASS_NAME, value=Config.CHAPTER_NUMBER)
-
-                # Return the chapter number
-                return chapter_number
-
-        except NoSuchElementException:
-            # If the chapter number is not found, do nothing and exit the function
-            pass
 
     def find_chapter_link(self, chapter):
             """
@@ -181,7 +163,7 @@ class MangaDownloader:
             except Exception as e:
                 print(f"Error finding chapter link: {e}")
                 raise
-
+    
     def extract_chapter_info(self, chapter):
             """
             Extracts chapter information from the given chapter element.
@@ -193,9 +175,6 @@ class MangaDownloader:
                 A dictionary containing the extracted chapter information, including the chapter number,
                 chapter name, and chapter link. Returns None if the chapter information could not be extracted.
             """
-            chapter_number = self.find_chapter_number(chapter)
-            if not chapter_number:
-                return None
 
             chapter_link_elements, flag_img_elements = self.find_chapter_link(
                 chapter)
@@ -214,9 +193,9 @@ class MangaDownloader:
                     link = self.unsupported_website(link)
 
                     # remove leading and trailing spaces
-                    manga_chapter = chapter_number.text.strip()
+                    #manga_chapter = chapter_number.text.strip()
                     chapter_info = {
-                        'chapter_number': manga_chapter,
+                        'chapter_number': chapter_name,
                         'chapter_name': chapter_name,
                         'chapter_link': link if link else None,
                     }
@@ -335,8 +314,55 @@ class MangaDownloader:
         # Initialize the page number and long screenshot taken variables
         page_number = 1
         long_screenshot_taken = False
+        print('Processing chapter')
+        # Get The network 
+        logs = self.web_interactions.driver.get_log('performance')
+        blob_pattern = re.compile(r"^blob:.*$")
+        png_pattern = re.compile(r"^.*\.png$")
+        
+        # Get the network logs
+        for log in logs:
+            json_log = json.loads(log['message'])
+            log_param = json_log['message']['params']
+            
+            
+            if 'response' in log_param:
+                response = log_param['response']
+                
 
-        while True:
+                if blob_pattern.match(response['url']):
+                    
+                    # Call the function to download the image
+                    page_number = self.process_page_info(page_number, series_name, chapter_number,response['url'])
+                    
+                    """ try:
+                            folder_path = self.file_operations.create_chapter_folder(
+                                self.save_path, series_name, chapter_number)  # Create the folder
+                            print('Folder path',folder_path)
+                            file_name = self.file_operations.create_screenshot_filename(
+                                page_number)  # Create the screenshot filename
+                            print('File name',file_name)
+                            # Save the screenshot
+                            self.file_operations.save_image(data_url, folder_path, file_name, page_number)
+                            
+                            
+                        except Exception as e:
+                            logger.error(f"Error saving image: {e}")
+                            raise"""
+                elif png_pattern.match(response['url']):
+                    # Call the function to download the image
+                    try:
+                        #print('URL',response['url'])
+                        pass
+
+                    except Exception as e:
+                        logger.error(f"Error saving image: {e}")
+                        raise
+                
+            #print('ALLO',json_log['message']['params'])
+        page_number = 1
+            
+        """while True:
             try:
                 if previous_chapter_id is None:
                     logger.error("Previous chapter ID is None. Exiting.")
@@ -364,11 +390,12 @@ class MangaDownloader:
 
             except StopIteration:
                 break
+            
             finally:
                 if not is_long_manga:
                     # Increment the page number
                     page_number += 1
-
+"""
 
     def process_page(self, page_number, previous_chapter_id, series_name, chapter_number):
         """
@@ -460,7 +487,7 @@ class MangaDownloader:
                 Exception: If there is an error saving the page information.
             """
             try:
-                self.file_operations.take_screenshot(
+                return self.file_operations.take_screenshot(
                     self.web_interactions.driver, self.save_path, series_name, chapter_number, page_number, img_src)
             except Exception as e:
                 logger.error(f"Error saving page information: {e}")
@@ -504,7 +531,6 @@ class MangaDownloader:
         try:
             # Ask the user to enter the name of the manga
             name = input("Enter the name of the manga: ")
-            mangas = find_mangas(name)  # Search for the manga
             mangas = self.find_mangas_name(name)
             
             if mangas:
@@ -521,14 +547,13 @@ class MangaDownloader:
 
                 if selected_index.isdigit() and 0 <= int(selected_index) <= len(mangas):
                     # Get the selected manga
-                    selected_manga = mangas[int(selected_index) - 1]
+                    
                     print(
-                        f"You selected: {selected_manga['title']}")
+                        f"You selected: {mangas[int(selected_index) - 1]['title']}")
                     # Fetch all the chapters for the selected manga
-                    all_chapters = self.fetch_chapters(selected_manga['link'])
-                    print("Done.")
+                    all_chapters = self.fetch_chapters(mangas[int(selected_index) - 1]['link'])
                     # Return the chapters and the name of the manga
-                    return all_chapters, selected_manga['title']
+                    return all_chapters, mangas[int(selected_index) - 1]['title']
                 else:
                     # make the user re-enter the number
                     print("Invalid number. Please enter a valid number.")
