@@ -4,7 +4,7 @@ Manga Downloader is a Python script designed for downloading manga chapters from
 
 ## Prerequisites
 
-Make sure you have the following installed:
+The prerequisites will be installed through the installation script:
 
 - Python 3
 - Chrome Browser
@@ -27,7 +27,7 @@ Make sure you have the following installed:
 3. **Install the required Python packages:**
 
     ```bash
-    pip install -r Requirements\requirements.txt
+    python install_dependencies.py
     ```
 
 4. **Configuration:**
@@ -39,12 +39,14 @@ Make sure you have the following installed:
     ```
 
     Replace `/path/to/save/manga` with the desired path to save manga images.
+    Otherwise, the default save path will be inside the project.
 
 5. **Run the script:**
 
     ```bash
     python mangadownload.py
     ```
+
     - Enter the name of the manga when prompted.
     - Select the manga from the search results.
     - Wait for the chapters to be fetched and created.
