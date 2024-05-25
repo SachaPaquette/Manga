@@ -2,7 +2,7 @@ import re
 import time
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
-from database import insert_manga_to_db, detect_duplicates, remove_doujinshi
+
 from tqdm import tqdm  # Import tqdm for the progress bar
 import random
 from Config.config import Config
@@ -267,34 +267,6 @@ def handle_unexpected_exception(logger, exception):
     raise
 
 
-def process_and_insert_mangas(driver, page_number):
-    """
-    Fetches and processes manga cards from a given page number using the provided driver,
-    then inserts the resulting manga array into the database.
-
-    Args:
-        driver: The Selenium webdriver instance to use for fetching the manga cards.
-        page_number (int): The page number to fetch the manga cards from.
-
-    Raises:
-        NoSuchElementException: If the manga cards cannot be found on the page.
-        Exception: For any other unexpected exceptions that occur during execution.
-    """
-    try:
-        manga_array = []  # Create an empty manga array
-        # Fetch and process the manga cards
-        manga_array += fetch_and_process_manga_cards(driver, page_number)
-        # Insert the manga array into the database
-        insert_manga_to_db(manga_array)
-
-    except NoSuchElementException as e:
-        # Handle no such element exception
-        handle_no_such_element_exception(logger, page_number, e)
-
-    except Exception as e:
-        handle_unexpected_exception(logger, e)  # Handle unexpected exceptions
-
-
 def get_user_confirmation(prompt, default="y"):
     """
     Prompts the user for confirmation and returns their response.
@@ -395,23 +367,6 @@ def update_sleep_threshold(page_number, current_threshold):
     return current_threshold
 
 
-def process_manga(driver):
-    """
-    Fetches and inserts manga data from multiple pages using the given driver.
-
-    Args:
-        driver: The Selenium WebDriver instance to use for fetching data.
-
-    Returns:
-        None
-    """
-    sleep_threshold = generate_random_sleep_threshold(
-        Config.MIN_SLEEP_THRESHOLD, Config.MAX_SLEEP_THRESHOLD)  # Generate a random sleep threshold
-    for page_number in range(1, Config.TOTAL_PAGES + 1):
-        fetch_and_insert_mangas_with_sleep(
-            driver, page_number, sleep_threshold)  # Fetch and insert mangas
-        sleep_threshold = update_sleep_threshold(
-            page_number, sleep_threshold)  # Update the sleep threshold
 
 
 def handle_user_confirmation():
@@ -437,21 +392,6 @@ def setup_driver_if_needed(update_symbols):
     """
     return driver_setup() if update_symbols != "n" else None
 
-
-def perform_main_workflow(driver):
-    """
-    Performs the main workflow for fetching manga pages, detecting duplicates, and removing doujinshi.
-
-    Args:
-        driver: The Selenium WebDriver instance to use for fetching manga pages.
-
-    Returns:
-        None
-    """
-    if driver:  # Check if the driver is initialized
-        process_manga(driver)  # Process the manga pages
-        detect_duplicates()  # Detect and remove duplicates
-        remove_doujinshi()  # Remove doujinshi from the database (fan-made manga)
 
 
 def cleanup(driver):
@@ -481,7 +421,7 @@ def main():
         # Set up the driver if needed
         driver = setup_driver_if_needed(update_symbols)
         # Perform the main workflow (fetching and inserting mangas)
-        perform_main_workflow(driver)
+        
 
     except Exception as e:
         handle_unexpected_exception(logger, e)  # Handle unexpected exceptions

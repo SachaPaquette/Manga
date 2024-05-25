@@ -27,7 +27,7 @@ import io
 class FileOperations:
     failed_images = []  # Array to store the images that failed to save
 
-    def __init__(self, web_interactions, driver):
+    def __init__(self, web_interactions):
         """Initialize the FileOperations instance. 
 
         Args:
@@ -37,7 +37,7 @@ class FileOperations:
         # Initialize the WebInteractions instance
         self.web_interactions = web_interactions
         # Initialize the WebDriver instance
-        self.driver = driver
+        self.driver = web_interactions.driver
         # Store the original tab handle
         self.original_tab_handles = None
         # Store the last processed URL

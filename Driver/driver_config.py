@@ -11,10 +11,11 @@ from Config.config import Config
 def driver_setup():
     # Set up the driver options
     options = Options()
-    
+    # Set up the desired capabilities
     caps = DesiredCapabilities().CHROME
     caps['goog:loggingPrefs'] = {'performance': 'ALL'}
-    
+    # Add caps to the options
+    options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
     # Keep the browser open after the script finishes executing (for debugging)
     #options.add_experimental_option('detach', True)
     # Run in headless mode (without opening a browser window)
@@ -24,7 +25,7 @@ def driver_setup():
     # Set a random user agent
     options.add_argument(f"user-agent={random.choice(Config.USER_AGENTS)}")
     # ChromeDriverManager will install the latest version of ChromeDriver
-    driver = webdriver.Chrome(desired_capabilities=caps, service=Service(
+    driver = webdriver.Chrome(service=Service(
         ChromeDriverManager().install()), options=options)
     # put the browser in focus
     driver.switch_to.window(driver.current_window_handle)

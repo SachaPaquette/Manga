@@ -16,6 +16,7 @@ from MangaDownload.FileOperations import FileOperations
 from MangaDownload.WebInteractions import WebInteractions
 from MangaDownload.WebInteractions import logger
 from MangaFetch.FetchOperations import fetch_and_process_manga_cards
+
 class MangaDownloader:
 
     def __init__(self, web_interactions=None, file_operations=None):
@@ -38,6 +39,11 @@ class MangaDownloader:
             self.save_path = Config.DEFAULT_SAVE_PATH
             print(f"Using default save path to save mangas: {self.save_path}")
 
+    def print_chapter_info(self, chapter):
+        """
+        Print the chapter number and name.
+        """
+        print(f"{chapter['chapter_number']}, {chapter['chapter_name']}, {chapter['chapter_link']}")
 
  
     def fetch_chapters(self, link):
@@ -57,16 +63,16 @@ class MangaDownloader:
             self.web_interactions.wait_for_chapter_cards()
             #time.sleep(3)  # Wait for the page to load
             # Wait for the chapter cards to load
-            print("Chapter cards.")
+            
             # Check if there are chapters on the page
             chapter_cards = self.web_interactions.driver.find_elements(
                 by=By.CLASS_NAME, value=Config.CHAPTER_CARDS)
-            print("Chapter cards loaded.")
+            
             # Loop while there are still chapters to fetch
             
             chapters_array = self.process_chapter_cards(
                 chapter_cards)
-            print("Chapters array")
+          
             while True:  # Change the loop condition
                 #print("Waiting for next page to load...")
                 if not self.web_interactions.click_next_page():  # Check the return value
@@ -183,6 +189,7 @@ class MangaDownloader:
                 return None
 
             for chapter_link, flag_img in zip(chapter_link_elements, flag_img_elements):
+                # Check if it is an English chapter
                 if flag_img == Config.UK_FLAG:
                     # split the text into a list of strings and get the first element
                     chapter_name = chapter_link.text.split('\n')[0]
@@ -261,8 +268,7 @@ class MangaDownloader:
     
     def download_images_from_chapter(self, chapter_link, series_name, chapter_number):
         try:
-            save_path = self.prepare_save_path(series_name, chapter_number)
-            if os.path.exists(save_path):
+            if os.path.exists(self.prepare_save_path(series_name, "Chapter " + str(chapter_number))):
                 logger.warning(
                     f"Folder for {chapter_number} already exists. Exiting.")
                 return
@@ -270,7 +276,6 @@ class MangaDownloader:
             self.navigate_to_chapter(chapter_link)
             previous_chapter_id = self.extract_chapter_id(chapter_link)
             is_long_manga = Config.LONG_MANGA_IMAGE in self.web_interactions.check_element_exists()
-
             self.process_chapter(is_long_manga, previous_chapter_id, series_name, chapter_number)
 
         except NoSuchElementException as e:
@@ -314,7 +319,7 @@ class MangaDownloader:
         # Initialize the page number and long screenshot taken variables
         page_number = 1
         long_screenshot_taken = False
-        print('Processing chapter')
+
         # Get The network 
         logs = self.web_interactions.driver.get_log('performance')
         blob_pattern = re.compile(r"^blob:.*$")
@@ -324,8 +329,7 @@ class MangaDownloader:
         for log in logs:
             json_log = json.loads(log['message'])
             log_param = json_log['message']['params']
-            
-            
+
             if 'response' in log_param:
                 response = log_param['response']
                 

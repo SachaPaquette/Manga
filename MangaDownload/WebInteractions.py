@@ -20,7 +20,18 @@ logger = setup_logging('manga_download', Config.MANGA_DOWNLOAD_LOG_PATH)
 
 
 class WebInteractions:
+    _instance = None  # Singleton instance
+
+    def __new__(cls, *args, **kwargs):
+        # Create a new instance if one doesn't already exist
+        if not cls._instance:
+            cls._instance = super().__new__(cls, *args, **kwargs)
+        return cls._instance
+
     def __init__(self):
+        if hasattr(self, 'driver'):
+            return  # Return if instance already initialized
+
         self.driver = driver_setup()  # Initialize the WebDriver instance
         self.original_tab_handle = None  # Store the original tab handle
         self.last_loaded_img_src = None  # Store the last loaded image source
