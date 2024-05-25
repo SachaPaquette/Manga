@@ -114,10 +114,8 @@ class FileOperations:
         Returns:
             _type_: _description_
         """
-        sanitized_folder_name = self.sanitize_folder_name(
-            series_name)  # Sanitize the folder name
         folder_path = self.create_folder_path(
-            save_path, sanitized_folder_name, "Chapter " + str(chapter_number))  # Create the folder path
+            save_path, self.sanitize_folder_name(series_name), "Chapter " + str(chapter_number))  # Create the folder path
 
         if not os.path.exists(folder_path):  # If the folder doesn't exist
             os.makedirs(folder_path)   # Create the folder if it doesn't exist

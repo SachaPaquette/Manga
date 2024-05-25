@@ -26,10 +26,28 @@ if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     
     # Install Google Chrome if not installed
     if ! which google-chrome > /dev/null 2>&1; then
-        wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-        sudo dpkg -i google-chrome-stable_current_amd64.deb
-        sudo apt-get install -f  
-        rm google-chrome-stable_current_amd64.deb
+        if [ -f /etc/debian_version ]; then
+            wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+            sudo dpkg -i google-chrome-stable_current_amd64.deb
+            sudo apt-get install -f  
+            rm google-chrome-stable_current_amd64.deb
+        elif [ -f /etc/redhat-release ]; then
+            # For RPM-based distributions
+            echo "Detected RPM-based distribution."
+            wget https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm
+            sudo yum localinstall google-chrome-stable_current_x86_64.rpm -y
+            rm google-chrome-stable_current_x86_64.rpm
+        elif [ -f /etc/arch-release ]; then
+            # For Arch-based distributions
+            echo "Detected Arch-based distribution."
+            sudo pacman -Syu --noconfirm
+            wget https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm
+            sudo pacman -U --noconfirm google-chrome-stable_current_x86_64.rpm
+            rm google-chrome-stable_current_x86_64.rpm
+        else
+            echo "Operating system not supported."
+            exit 1
+        fi
     fi
 else 
     echo "Operating system not supported."
