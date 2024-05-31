@@ -18,7 +18,7 @@ from MangaDownload.WebInteractions import logger
 from MangaFetch.FetchOperations import fetch_and_process_manga_cards
 
 class MangaDownloader:
-
+   
     def __init__(self, web_interactions=None, file_operations=None):
         """
         Initializes a MangaOperations object with the given WebInteractions and FileOperations instances.
@@ -31,6 +31,8 @@ class MangaDownloader:
         # Initialize the WebDriver instance, save path and logger
         self.web_interactions = web_interactions if web_interactions else WebInteractions()
         self.file_operations = file_operations if file_operations else FileOperations(self.web_interactions)
+        self.added_chapter_numbers = set()  # Keep track of added chapter numbers
+
         # Configure the save path
         if os.getenv("SAVE_PATH") is not None:
             self.save_path = os.getenv("SAVE_PATH")
@@ -106,32 +108,27 @@ class MangaDownloader:
         Returns:
             tuple: A tuple containing the array of chapter info objects and the number of the first chapter.
         """
-        try:
-            chapters_array = []
-            for chapter in chapter_cards:
-                try:
-                    # Extract the chapter info from the chapter card
-                    chapter_info = self.extract_chapter_info(chapter)
+        chapters_array = []
 
-                    if chapter_info:
-                    
-                        # Only append if the last element of the array is not the same as the current chapter
-                        if not chapters_array or chapters_array[-1]["chapter_name"] != chapter_info["chapter_name"]:
+        for chapter in chapter_cards:
+            try:
+                # Extract the chapter info from the chapter card
+                chapter_info = self.extract_chapter_info(chapter)
+
+                if chapter_info:
+                    # Check if the chapter number has already been added
+                    if chapter_info["chapter_number"] not in self.added_chapter_numbers:
+                        chapters_array.append(chapter_info)
+                        self.added_chapter_numbers.add(chapter_info["chapter_number"])
                         
-                            chapters_array.append(chapter_info)
-                            print(f"Chapter {chapter_info['chapter_name']}: {chapters_array[-1]['chapter_name']}")
+            except NoSuchElementException as e:
+                logger.error(f"Error while fetching chapter: {e}")
+            except Exception as e:
+                logger.error(f"Error processing chapter cards: {e}")
+                continue
+        return chapters_array
 
-                        else:
-                            print(f"Chapter {chapter_info['chapter_number']} already exists. Skipping.")
-                        
-                except NoSuchElementException as e:
-                    logger.error(f"Error while fetching chapter: {e}")
 
-            
-            return chapters_array
-        except Exception as e:
-            logger.error(f"Error processing chapter cards: {e}")
-            raise
 
     def unsupported_website(self, link):
             """
@@ -150,26 +147,37 @@ class MangaDownloader:
 
 
     def find_chapter_link(self, chapter):
-            """
-            Finds the chapter link elements and flag image elements for a given chapter.
+        """
+        Finds the chapter link elements and flag image elements for a given chapter.
 
-            Args:
-                chapter: The chapter element to search for links and flag images.
+        Args:
+            chapter: The chapter element to search for links and flag images.
 
-            Returns:
-                A tuple containing the chapter link elements and flag image elements, or None if not found.
-            """
-            try:
-                chapter_link_elements = chapter.find_elements(
-                    by=By.CLASS_NAME, value=Config.CHAPTER_LINK)
-                flag_img_elements = [link.find_element(by=By.TAG_NAME, value=Config.IMG).get_attribute(
-                    'src') for link in chapter_link_elements]
-                return chapter_link_elements, flag_img_elements
-            except NoSuchElementException:
-                return None, None
-            except Exception as e:
-                print(f"Error finding chapter link: {e}")
-                raise
+        Returns:
+            The chapter link element corresponding to the English title, or None if not found.
+        """
+        try:
+            # Find all chapter link elements within the chapter
+            chapter_link_elements = chapter.find_elements(by=By.CLASS_NAME, value=Config.CHAPTER_LINK)
+            
+            for link in chapter_link_elements:
+                try:
+                    # Check if the link has an image element with title attribute 'English'
+                    img_element = link.find_element(by=By.TAG_NAME, value=Config.IMG)
+                    if img_element.get_attribute('title') == 'English':
+                        return link
+                except NoSuchElementException:
+                    continue
+            
+            return None
+
+        except NoSuchElementException as e:
+            print(f"NoSuchElementException encountered: {e}")
+            return None
+        except Exception as e:
+            print(f"Error finding chapter link: {e}")
+            return None
+
     
 
     def extract_chapter_info(self, chapter):
@@ -184,33 +192,29 @@ class MangaDownloader:
                 chapter name, and chapter link. Returns None if the chapter information could not be extracted.
             """
 
-            chapter_link_elements, flag_img_elements = self.find_chapter_link(chapter)
-            # Remove the loop since chapter_link_elements and flag_img_elements are lists
-            if not chapter_link_elements:
+            chapter_link_elements = self.find_chapter_link(chapter)
+            
+            if  chapter_link_elements is None:
                 return None
             
             
-            uk_flag_index = next((i for i, flag_img in enumerate(flag_img_elements) if flag_img == Config.UK_FLAG), None)
-            if  uk_flag_index is None:
-                return None
-            print(f"UK flag index: {uk_flag_index}")
-            if uk_flag_index is not None:
-                chapter_link = chapter_link_elements[uk_flag_index]
                 
-                # split the text into a list of strings and get the first element
-                chapter_name = chapter_link.text.split('\n')[0]
-                link = chapter_link.find_element(
-                    by=By.TAG_NAME, value=Config.HYPERLINK).get_attribute(Config.HREF)
+            # split the text into a list of strings and get the first element
+            chapter_name = chapter_link_elements.text.split('\n')[0]
+            
+            link = chapter_link_elements.find_element(
+                by=By.TAG_NAME, value=Config.HYPERLINK).get_attribute(Config.HREF)
 
-                # check if the website is supported
-                link = self.unsupported_website(link)
+            # check if the website is supported
+            link = self.unsupported_website(link)
 
-                # remove leading and trailing spaces
-                chapter_info = {
-                    'chapter_number': chapter_name,
-                    'chapter_name': chapter_name,
-                    'chapter_link': link if link else None,
-                }    
+            # remove leading and trailing spaces
+            chapter_info = {
+                'chapter_number': chapter_name,
+                'chapter_name': chapter_name,
+                'chapter_link': link
+            }    
+            
             return chapter_info if chapter_info else None
 
             
