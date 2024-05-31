@@ -22,6 +22,7 @@ from Driver.driver_config import driver_setup
 import random
 from PIL import Image
 import io
+import urllib.request
 
 
 class FileOperations:
@@ -152,145 +153,27 @@ class FileOperations:
         img_data = self.get_image_data(driver, img_src)
         if img_data:
             try:
-                file_name = self.create_screenshot_filename(
-                    page_number)  # Create the screenshot filename
                 # Save the screenshot
-                self.save_image(img_data, folder_path, file_name, page_number)
+                self.save_image(img_data, folder_path, self.create_screenshot_filename(page_number), page_number)
                 return page_number + 1
             except Exception as e:
                 logger.error(f"Error saving image: {e}")
                 raise
         else:
-            logger.error(f"Image data not found for page {page_number}")
             return page_number
+    def save_png_links(self, save_path, series_name, chapter_number, page_number, img_src):
+        folder_path, _ = self.create_chapter_folder(save_path, series_name, chapter_number, page_number)
+        self.save_image_from_url(img_src, folder_path, self.create_screenshot_filename(page_number))
+        return page_number + 1
 
-    def get_all_nodes(self, driver, css_selector):
-        """Function to get all nodes in a page, including hidden ones.
-
-        Args:
-            driver (WebDriver): The Selenium WebDriver instance.
-            css_selector (str): The CSS selector to match the nodes.
-
-        Returns:
-            List[str]: The outerHTML of all matched nodes.
-        """
-        script = f"""
-        var nodes = document.querySelectorAll('{css_selector}');
-        var arr = Array.from(nodes);
-        return arr.map(node => node.outerHTML);
-        """
-        return driver.execute_script(script)
-
-    def find_parent_div(self, driver):
-        """Function to find the parent div in a long manga page. A long manga page is a single page that contains all of the chapter.
-        This function also waits until all of the sub-divs are loaded completely before continuing. 
-
-        Args:
-            driver (WebDriver): The Selenium WebDriver instance.
-
-        Returns:
-            WebElement: The parent div element.
-        """
-        #time.sleep(10)
-        
-        # Find the parent div
-        parent_div = WebDriverWait(driver, 30).until(
-            EC.presence_of_element_located((By.CLASS_NAME, Config.LONG_MANGA_PARENT_DIV)))
-        sub_divs_html = self.get_all_nodes(driver, Config.LONG_MANGA_SUBDIV)
-        for sub_div_html in sub_divs_html:
-            logger.info(f"Sub div outerHTML: {sub_div_html}")
-        # log all of the sub div class name of the parent_div
-
-        sub_divs = self.web_interactions.find_multiple_elements(
-            By.CLASS_NAME, Config.LONG_MANGA_SUBDIV, parent_div)
-
-        # Wait until all sub-divs are loaded, including hidden ones
-        while True:
-
-            unloaded_elements = self.web_interactions.find_multiple_elements(
-                By.CSS_SELECTOR, Config.UNLOADED_SUB_DIV, parent_div)
-            if not unloaded_elements:
-                break
-            time.sleep(1)
-
-            parent_div = self.web_interactions.find_single_element(
-                By.CLASS_NAME, Config.LONG_MANGA_PARENT_DIV, None)
-
-            sub_divs = self.find_multiple_elements(
-                By.CLASS_NAME, Config.LONG_MANGA_SUBDIV, parent_div)
-            # Access sub_divs to avoid Pylance warning
-            _ = sub_divs
-        return parent_div
-
-    def find_sub_divs(self, driver):
-        """Function to find all sub-divs in a long manga page. A long manga page is a single page that contains all of the chapter.
-        Inside the parent div, there are multiple sub-divs. Each sub-div contains a part of the chapter.
-
-        Args:
-            driver (WebDriver): The Selenium WebDriver instance.
-
-        Returns:
-            list: A list of all sub-divs from the parent-div.
-        """
-        # Find all sub-divs
-        return self.web_interactions.find_multiple_elements(By.CLASS_NAME, Config.LONG_MANGA_SUBDIV, self.find_parent_div(driver))
-
-    def save_long_screenshot(self, driver, save_path, series_name, chapter_number, page_number):
-        """Function to save a screenshot of a long manga page.
-           A long manga page is a single page that contains all of the chapter.
-
-
-        Args:
-            driver (WebDriver): The Selenium WebDriver instance.
-            save_path (string): The path to save the manga.
-            series_name (string): The name of the manga series.
-            chapter_number (string): The chapter number. (ex: Chapter 1)
-            page_number (int): The page number. (ex: 1)
-        """
-        try:
-            # Create the folder path
-            folder_path = self.create_chapter_folder(
-                save_path, series_name, chapter_number, page_number)
-            # Find all sub-divs
-            sub_divs = self.find_sub_divs(driver)
-
-            # Fetch all image data URLs
-            """img_data_list = [self.get_image_data(driver, sub_div.find_element(
-                By.TAG_NAME, Config.IMG).get_attribute(Config.SRC)) for sub_div in sub_divs]"""
-            img_data_list = [self.get_image_data(driver, self.web_interactions.find_single_element(
-                By.TAG_NAME, Config.IMG, sub_div).get_attribute(Config.SRC)) for sub_div in sub_divs]
-            for i, img_data in enumerate(img_data_list):
-                try:
-                    # Variable to store the index of the image
-                    index = i + 1
-                    if img_data:
-                        # Create the file name (e.g. page_1.png)
-                        file_name = self.create_screenshot_filename(index)
-                        # Save the image
-                        self.save_image(img_data,
-                                        folder_path, file_name, index)
-                except Exception as img_error:
-                    logger.error(f"Error saving image {index}: {img_error}")
-
-            # reset the unique base64 data set
-            self.unique_base64_data = set()
-        except Exception as e:
-            logger.error(f"Error saving long screenshot: {e}")
-            raise
-        except KeyboardInterrupt:
-            print("Exiting...")
-            raise
-
-    def write_image(self, image_data, folder_path, file_name):
-        """Function to write the image data to a file. Creating the file is done using the "with" statement.
-
-        Args:
-            image_data (string): The base64 data of the image.
-            folder_path (string): The folder path to save the image.
-            file_name (string): The file name of the image that will be saved. (ex: page_1.png)
-        """
-        with open(os.path.join(folder_path, file_name), 'wb') as file:
-            file.write(image_data)
+    def save_image_from_url(self, img_src, folder_path, file_name):
+        response = requests.get(img_src)
+        if response.status_code == 200:
+            image = Image.open(io.BytesIO(response.content))
+            image.save(os.path.join(folder_path, file_name))
+            return True
+        else:
+            return False
 
     def save_image(self, img_data, folder_path, file_name, index):
         """Function to save the image data to a file. If the image is too large, it is split into chunks and saved.
@@ -302,50 +185,15 @@ class FileOperations:
             index (int): The index of the image. 
         """
         try:
-            if img_data:
-                image_data = base64.b64decode(img_data.split(',')[1])
-                img = Image.open(io.BytesIO(image_data))
-
-                # Check the height of the image
-                img_height = img.size[1]
-
-                
-                    # Save the image as-is
-                self.write_image(image_data, folder_path, file_name)
-            else:
-                logger.error(f"Image data not found for page {index}")
+            image_data = base64.b64decode(img_data.split(',')[1])
+            # Save the image as-is
+            self.write_image(image_data, folder_path, file_name)
         except NoSuchWindowException:
             # Handle the "no such window" exception
             logger.error(f"Window closed for sub-div {index + 1}")
-        except KeyboardInterrupt:
-            print("Exiting...")
-            raise
         except Exception as e:
             logger.error(f"Error saving image: {e}")
             raise
-
-    def split_image(self, img, folder_path, file_name, chunk_height):
-        """This function splits an image into chunks of the specified height and saves each chunk as a separate image.
-        This is done to avoid having a single image that is too large.
-
-        Args:
-            img (Image): The image to split into chunks.
-            folder_path (string): The folder path to save the image chunks.
-            file_name (string): The file name of the image that wiil be saved in chunks. (ex: page_1.png)
-            chunk_height (int): The height of each image chunk.
-        """
-        # Get the width and height of the image
-        width, height = img.size
-        # Split the image into chunks
-        for i in range(0, height, chunk_height):
-            box = (0, i, width, min(i + chunk_height, height))
-            chunk = img.crop(box)
-            file_name_removed_extension = file_name.split('.')[0]
-            # Save each chunk with a unique file name
-            chunk_file_name = f"{file_name_removed_extension}_part_{i // chunk_height}.png"
-            with open(os.path.join(folder_path, chunk_file_name), 'wb') as file:
-                # Save the image chunk
-                chunk.save(file)
 
     def fetch_base64_data(self, driver, img_src):
         """Fetch the base64 data from the image source. This is done using JavaScript. The image source is a blob URL,
@@ -418,24 +266,18 @@ class FileOperations:
 
     def get_image_data(self, driver, img_src):
         try:
-            base64_data = self.fetch_base64_data(
-                driver, img_src)  # Fetch the base64 data
-            base64_part = self.extract_base64_part(
-                base64_data)  # Extract the base64 part
-            padded_base64_data = self.add_padding(
-                base64_part)  # Add padding to the base64 part
-            data_url = self.construct_data_url(
-                padded_base64_data)  # Construct the data URL
+            base64_data = self.construct_data_url(
+                self.add_padding(
+                    self.extract_base64_part(
+                        self.fetch_base64_data(driver, img_src)
+                )))
+                
 
-            if self.handle_duplicates(data_url):
+            if self.handle_duplicates(base64_data):
                 # If the data URL is a duplicate, return None
                 return None
             else:
-                return data_url  # Return the data URL
-
-        except WebDriverException as e:
-            logger.error(
-                f"Error executing JavaScript or taking screenshot - {e}")
+                return base64_data  # Return the data URL
         except Exception as e:
             logger.error(f"Unexpected error: {e}")
 

@@ -39,7 +39,6 @@ class WebInteractions:
     def cleanup(self):
         try:
             self.driver.close()  # Close the current tab
-            
             print("Resources cleaned up.")
         except NoSuchWindowException:
             print("No such window exception while cleaning up resources.")
@@ -101,8 +100,6 @@ class WebInteractions:
                     EC.presence_of_all_elements_located(
                         (By.CLASS_NAME, Config.CHAPTER_CARDS))
                 )
-                
-                
                 break
         except TimeoutException:
             logger.error("Timed out waiting for chapter cards to load")

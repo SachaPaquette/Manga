@@ -9,7 +9,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import  NoSuchElementException, TimeoutException
 from dotenv import load_dotenv
-import time
+import time, datetime 
 from Config.config import Config
 from Config.logs_config import setup_logging
 from MangaDownload.FileOperations import FileOperations
@@ -57,40 +57,35 @@ class MangaDownloader:
         """
         logger.info(f"Fetching chapters for link: {link}")
         self.web_interactions.naviguate(link)  # Navigate to the link
-        print("Fetching chapters...")
-
         try:
             self.web_interactions.wait_for_chapter_cards()
-            #time.sleep(3)  # Wait for the page to load
-            # Wait for the chapter cards to load
-            
             # Check if there are chapters on the page
             chapter_cards = self.web_interactions.driver.find_elements(
                 by=By.CLASS_NAME, value=Config.CHAPTER_CARDS)
             
             # Loop while there are still chapters to fetch
             
-            chapters_array = self.process_chapter_cards(
-                chapter_cards)
+            chapters_array = self.process_chapter_cards(chapter_cards)
           
-            while True:  # Change the loop condition
-                #print("Waiting for next page to load...")
+            while True:  
+                
                 if not self.web_interactions.click_next_page():  # Check the return value
-                    print("No next page. Stopping.")
                     break
 
                 self.web_interactions.wait_for_next_page()  # Wait for the next page to load
                 chapter_cards = self.web_interactions.driver.find_elements(
                     by=By.CLASS_NAME, value=Config.CHAPTER_CARDS)  # Find all the chapter cards on the page
                 # Process the chapter cards and append the results to the array
-                chapters_array += self.process_chapter_cards(chapter_cards)[0]
+                chapters_array += self.process_chapter_cards(
+                    chapter_cards)
 
             # Before returning the chapters, we want to add a chapter number to each chapter object in descending order
             for i, chapter in enumerate(chapters_array):
                 # Modify the chapter number to be in descending order
                 chapter['chapter_number'] = len(chapters_array) - i
-                
-                
+            print(f"Found {len(chapters_array)} chapters.")
+            print(chapters_array)        
+        
         except Exception as e:
             logger.error(f"Error fetching chapters: {e}")
             raise
@@ -101,37 +96,43 @@ class MangaDownloader:
 
 
     def process_chapter_cards(self, chapter_cards):
-            """
-            Extracts chapter information from the given chapter cards and returns an array of chapter info objects
-            along with the number of the first chapter.
+        """
+        Extracts chapter information from the given chapter cards and returns an array of chapter info objects
+        along with the number of the first chapter.
 
-            Args:
-                chapter_cards (list): A list of chapter cards to extract information from.
+        Args:
+            chapter_cards (list): A list of chapter cards to extract information from.
 
-            Returns:
-                tuple: A tuple containing the array of chapter info objects and the number of the first chapter.
-            """
-            try:
-                chapters_array = []
-                
-                for chapter in chapter_cards:
-                    try:
-                        # Extract the chapter info from the chapter card
-                        chapter_info = self.extract_chapter_info(chapter)
+        Returns:
+            tuple: A tuple containing the array of chapter info objects and the number of the first chapter.
+        """
+        try:
+            chapters_array = []
+            for chapter in chapter_cards:
+                try:
+                    # Extract the chapter info from the chapter card
+                    chapter_info = self.extract_chapter_info(chapter)
 
-                        if chapter_info:
-                            print(
-                                f"Fetched: {chapter_info['chapter_name']}")
-                            # Append the chapter info to the array
+                    if chapter_info:
+                    
+                        # Only append if the last element of the array is not the same as the current chapter
+                        if not chapters_array or chapters_array[-1]["chapter_name"] != chapter_info["chapter_name"]:
+                        
                             chapters_array.append(chapter_info)
-                            # Get the chapter number of the first chapter
-                            
-                    except NoSuchElementException as e:
-                        logger.error(f"Error while fetching chapter: {e}")
-                return chapters_array
-            except Exception as e:
-                logger.error(f"Error processing chapter cards: {e}")
-                raise
+                            print(f"Chapter {chapter_info['chapter_name']}: {chapters_array[-1]['chapter_name']}")
+
+                        else:
+                            print(f"Chapter {chapter_info['chapter_number']} already exists. Skipping.")
+                        
+                except NoSuchElementException as e:
+                    logger.error(f"Error while fetching chapter: {e}")
+
+            
+            return chapters_array
+        except Exception as e:
+            logger.error(f"Error processing chapter cards: {e}")
+            raise
+
     def unsupported_website(self, link):
             """
             Checks if the given link is from the mangaplus website, which is not supported due to its different layout.
@@ -170,6 +171,7 @@ class MangaDownloader:
                 print(f"Error finding chapter link: {e}")
                 raise
     
+
     def extract_chapter_info(self, chapter):
             """
             Extracts chapter information from the given chapter element.
@@ -182,33 +184,36 @@ class MangaDownloader:
                 chapter name, and chapter link. Returns None if the chapter information could not be extracted.
             """
 
-            chapter_link_elements, flag_img_elements = self.find_chapter_link(
-                chapter)
+            chapter_link_elements, flag_img_elements = self.find_chapter_link(chapter)
             # Remove the loop since chapter_link_elements and flag_img_elements are lists
             if not chapter_link_elements:
                 return None
+            
+            
+            uk_flag_index = next((i for i, flag_img in enumerate(flag_img_elements) if flag_img == Config.UK_FLAG), None)
+            if  uk_flag_index is None:
+                return None
+            print(f"UK flag index: {uk_flag_index}")
+            if uk_flag_index is not None:
+                chapter_link = chapter_link_elements[uk_flag_index]
+                
+                # split the text into a list of strings and get the first element
+                chapter_name = chapter_link.text.split('\n')[0]
+                link = chapter_link.find_element(
+                    by=By.TAG_NAME, value=Config.HYPERLINK).get_attribute(Config.HREF)
 
-            for chapter_link, flag_img in zip(chapter_link_elements, flag_img_elements):
-                # Check if it is an English chapter
-                if flag_img == Config.UK_FLAG:
-                    # split the text into a list of strings and get the first element
-                    chapter_name = chapter_link.text.split('\n')[0]
-                    link = chapter_link.find_element(
-                        by=By.TAG_NAME, value=Config.HYPERLINK).get_attribute(Config.HREF)
+                # check if the website is supported
+                link = self.unsupported_website(link)
 
-                    # check if the website is supported
-                    link = self.unsupported_website(link)
+                # remove leading and trailing spaces
+                chapter_info = {
+                    'chapter_number': chapter_name,
+                    'chapter_name': chapter_name,
+                    'chapter_link': link if link else None,
+                }    
+            return chapter_info if chapter_info else None
 
-                    # remove leading and trailing spaces
-                    #manga_chapter = chapter_number.text.strip()
-                    chapter_info = {
-                        'chapter_number': chapter_name,
-                        'chapter_name': chapter_name,
-                        'chapter_link': link if link else None,
-                    }
-                    return chapter_info
-
-            return None
+            
 
     def extract_chapter_id(self, page_url):
             """
@@ -274,9 +279,9 @@ class MangaDownloader:
                 return
 
             self.navigate_to_chapter(chapter_link)
-            previous_chapter_id = self.extract_chapter_id(chapter_link)
-            is_long_manga = Config.LONG_MANGA_IMAGE in self.web_interactions.check_element_exists()
-            self.process_chapter(is_long_manga, previous_chapter_id, series_name, chapter_number)
+            #previous_chapter_id = self.extract_chapter_id(chapter_link)
+            #is_long_manga = Config.LONG_MANGA_IMAGE in self.web_interactions.check_element_exists()
+            self.process_chapter(series_name, chapter_number)
 
         except NoSuchElementException as e:
             logger.error(f"Element not found: {e}")
@@ -303,13 +308,11 @@ class MangaDownloader:
         self.web_interactions.wait_until_element_loaded(By.CSS_SELECTOR, 'body')
 
 
-    def process_chapter(self, is_long_manga, previous_chapter_id, series_name, chapter_number):
+    def process_chapter(self, series_name, chapter_number):
         """
         Process a chapter of a manga.
 
         Args:
-            is_long_manga (bool): A boolean indicating whether the manga is long or not.
-            previous_chapter_id (int): The ID of the previous chapter.
             series_name (str): The name of the manga series.
             chapter_number (int): The number of the chapter.
 
@@ -318,183 +321,30 @@ class MangaDownloader:
         """
         # Initialize the page number and long screenshot taken variables
         page_number = 1
-        long_screenshot_taken = False
-
-        # Get The network 
-        logs = self.web_interactions.driver.get_log('performance')
+        # Regex pattern to match blob URLs
         blob_pattern = re.compile(r"^blob:.*$")
-        png_pattern = re.compile(r"^.*\.png$")
-        
-        # Get the network logs
-        for log in logs:
-            json_log = json.loads(log['message'])
-            log_param = json_log['message']['params']
+        # Regex pattern to match PNG URLs and ignore the rest
+        png_pattern = re.compile(r"^https://.*mangadex\.network/data/.*\.png$")
+        pages = []
 
-            if 'response' in log_param:
-                response = log_param['response']
+            # Get the network logs
+        for log in self.web_interactions.driver.get_log('performance'):
+            if 'response' in json.loads(log['message'])['message']['params']:
+                response = json.loads(log['message'])['message']['params']['response']
                 
+                if response.get('url'):
+                    blob_match = blob_pattern.match(response['url'])
+                    png_match = png_pattern.match(response['url'])
+                    if png_match:
+                        
+                        page_number = int(response['url'].split('/')[-1].split('-')[0])
+                        pages.append((page_number, response['url']))
 
-                if blob_pattern.match(response['url']):
-                    
-                    # Call the function to download the image
-                    page_number = self.process_page_info(page_number, series_name, chapter_number,response['url'])
-                    
-                    """ try:
-                            folder_path = self.file_operations.create_chapter_folder(
-                                self.save_path, series_name, chapter_number)  # Create the folder
-                            print('Folder path',folder_path)
-                            file_name = self.file_operations.create_screenshot_filename(
-                                page_number)  # Create the screenshot filename
-                            print('File name',file_name)
-                            # Save the screenshot
-                            self.file_operations.save_image(data_url, folder_path, file_name, page_number)
-                            
-                            
-                        except Exception as e:
-                            logger.error(f"Error saving image: {e}")
-                            raise"""
-                elif png_pattern.match(response['url']):
-                    # Call the function to download the image
-                    try:
-                        #print('URL',response['url'])
-                        pass
-
-                    except Exception as e:
-                        logger.error(f"Error saving image: {e}")
-                        raise
-                
-            #print('ALLO',json_log['message']['params'])
-        page_number = 1
-            
-        """while True:
-            try:
-                if previous_chapter_id is None:
-                    logger.error("Previous chapter ID is None. Exiting.")
-                    return
-
-                if previous_chapter_id != self.extract_chapter_id(self.web_interactions.driver.current_url) and not is_long_manga:
-                    logger.info("Chapter completed.")
-                    return
-
-                if Config.LONG_MANGA_IMAGE in self.web_interactions.check_element_exists() and not long_screenshot_taken:
-                    long_screenshot_taken = True
-                    self.file_operations.save_long_screenshot(
-                        self.web_interactions.driver, self.save_path, series_name, chapter_number, None)
-                    break
-
-                elif not is_long_manga:
-                    element_exists_result = self.web_interactions.check_element_exists()
-
-                    if element_exists_result:
-                        self.process_page(
-                            page_number, previous_chapter_id, series_name, chapter_number)
-                    else:
-                        logger.warning("Element does not exist.")
-                        break
-
-            except StopIteration:
-                break
-            
-            finally:
-                if not is_long_manga:
-                    # Increment the page number
-                    page_number += 1
-"""
-
-    def process_page(self, page_number, previous_chapter_id, series_name, chapter_number):
-        """
-        Processes a single page of a manga chapter.
-
-        Args:
-            page_number (int): The page number to process.
-            previous_chapter_id (str): The ID of the previous chapter in the series.
-            series_name (str): The name of the manga series.
-            chapter_number (int): The number of the chapter being processed.
-        """
-        try:
-            # Wait for the pages wrap element to load
-            self.web_interactions.wait_until_page_loaded()
-
-            while True:
-                config = self.web_interactions.check_element_exists()
-                if config == Config.MANGA_IMAGE:
-                    self.process_manga_image(page_number, series_name, chapter_number, previous_chapter_id)
-                elif config is None:
-                    print("No manga image found")
-                    return
-                else:
-                    print("Error")
-                    if not self.handle_error():
-                        break
-
-        except StopIteration:
-            pass
-
-
-    def process_manga_image(self, page_number, series_name, chapter_number, previous_chapter_id):
-        """
-        Processes a manga image by waiting for it to load, extracting its source URL, and saving the page information.
-        If the chapter has ended, the method raises a StopIteration exception to signal the end of the chapter.
-        If the URL does not change after pressing the right arrow key, the method raises a StopIteration exception to stop the process.
         
-        Args:
-            page_number (int): The current page number.
-            series_name (str): The name of the manga series.
-            chapter_number (int): The current chapter number.
-            previous_chapter_id (str): The ID of the previous chapter.
-        """
-        # Get the URL before pressing the right arrow key
-        before_url = self.web_interactions.driver.current_url
+        sorted_pages = sorted(pages, key=lambda x: x[0])
+        for page_number, page_url in sorted_pages:
+            self.file_operations.save_png_links(self.save_path, series_name, chapter_number, page_number, page_url)
 
-        error_count = 0  # Initialize error count
-        max_error_count = 3  # Set a maximum number of consecutive errors allowed
-
-        while True:
-            img_src = self.web_interactions.wait_until_image_loaded()
-            if img_src:
-                self.process_page_info(page_number, series_name, chapter_number, img_src)
-                # For small manga, proceed with arrow key press
-                self.web_interactions.press_right_arrow_key()
-
-                # Get the current chapter ID after the arrow key press
-                current_chapter_id = self.extract_chapter_id(self.web_interactions.driver.current_url)
-
-                # Check if the chapter ID has changed (i.e., the chapter has ended)
-                if current_chapter_id != previous_chapter_id:
-                    logger.info("Chapter completed.")
-                    self.file_operations.delete_last_page(self.save_path, series_name, chapter_number, page_number)
-                    raise StopIteration
-
-                # Check if the URL has changed after pressing the right arrow key
-                if self.web_interactions.driver.current_url == before_url:
-                    logger.error("URL did not change after pressing the right arrow key. Stopping.")
-                    # Popup is present on the page
-                    self.web_interactions.dismiss_popup_if_present()
-                    raise StopIteration
-
-                page_number += 1
-            else:
-                if not self.handle_error():
-                    break
-
-    def process_page_info(self, page_number, series_name, chapter_number, img_src):
-            """
-            Takes a screenshot of the current page and saves it to the specified directory.
-
-            Args:
-                page_number (int): The number of the current page.
-                series_name (str): The name of the manga series.
-                chapter_number (int): The number of the current chapter.
-                img_src (str): The source URL of the image to be saved.
-
-            Raises:
-                Exception: If there is an error saving the page information.
-            """
-            try:
-                return self.file_operations.take_screenshot(
-                    self.web_interactions.driver, self.save_path, series_name, chapter_number, page_number, img_src)
-            except Exception as e:
-                logger.error(f"Error saving page information: {e}")
 
 
     def handle_error(self):

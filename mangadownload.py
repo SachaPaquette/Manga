@@ -34,6 +34,6 @@ def main():
         print(f"An unexpected error occurred: {e}")
     finally:
         web_interactions.cleanup()
-        pass
+        exit()
 if __name__ == "__main__":
     main() # Run the main function
