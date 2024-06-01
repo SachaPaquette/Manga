@@ -1,6 +1,8 @@
 import json
 import os
 import re
+
+from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -16,6 +18,7 @@ from MangaDownload.FileOperations import FileOperations
 from MangaDownload.WebInteractions import WebInteractions
 from MangaDownload.WebInteractions import logger
 from MangaFetch.FetchOperations import fetch_and_process_manga_cards
+from selenium.webdriver.support.ui import WebDriverWait
 
 class MangaDownloader:
    
@@ -32,7 +35,8 @@ class MangaDownloader:
         self.web_interactions = web_interactions if web_interactions else WebInteractions()
         self.file_operations = file_operations if file_operations else FileOperations(self.web_interactions)
         self.added_chapter_numbers = set()  # Keep track of added chapter numbers
-
+        self.chapter_number_list = []  # Keep track of chapter numbers
+        self.previous_chapter_name = None  # Keep track of the previous chapter name
         # Configure the save path
         if os.getenv("SAVE_PATH") is not None:
             self.save_path = os.getenv("SAVE_PATH")
@@ -81,13 +85,23 @@ class MangaDownloader:
                 chapters_array += self.process_chapter_cards(
                     chapter_cards)
 
-            # Before returning the chapters, we want to add a chapter number to each chapter object in descending order
-            for i, chapter in enumerate(chapters_array):
-                # Modify the chapter number to be in descending order
-                chapter['chapter_number'] = len(chapters_array) - i
             print(f"Found {len(chapters_array)} chapters.")
             print(chapters_array)        
         
+            # Add the chapter numbers when the chapter_number is none
+            for i, chapter in enumerate(chapters_array):
+                if chapter['chapter_number'] is None:
+                    if i > 0 and chapters_array[i - 1]['chapter_number'] is not None:
+                        chapter['chapter_number'] = chapters_array[i - 1]['chapter_number'] - 1
+                    elif i < len(chapters_array) - 1 and chapters_array[i + 1]['chapter_number'] is not None:
+                        chapter['chapter_number'] = chapters_array[i + 1]['chapter_number'] + 1
+                    else:
+                        chapter['chapter_number'] = len(chapters_array) - i
+            
+                    
+                        
+                
+            
         except Exception as e:
             logger.error(f"Error fetching chapters: {e}")
             raise
@@ -115,12 +129,11 @@ class MangaDownloader:
                 # Extract the chapter info from the chapter card
                 chapter_info = self.extract_chapter_info(chapter)
 
-                if chapter_info:
-                    # Check if the chapter number has already been added
-                    if chapter_info["chapter_number"] not in self.added_chapter_numbers:
-                        chapters_array.append(chapter_info)
-                        self.added_chapter_numbers.add(chapter_info["chapter_number"])
-                        
+                # Check if the chapter number has already been added
+                if chapter_info and chapter_info["chapter_name"] != self.previous_chapter_name:
+                    chapters_array.append(chapter_info)
+                    #self.added_chapter_numbers.add(chapter_info["chapter_number"])
+                    self.previous_chapter_name = chapter_info["chapter_name"]
             except NoSuchElementException as e:
                 logger.error(f"Error while fetching chapter: {e}")
             except Exception as e:
@@ -178,7 +191,21 @@ class MangaDownloader:
             print(f"Error finding chapter link: {e}")
             return None
 
-    
+
+    def extract_chapter_number(self, chapter):
+        try:            
+            soup = BeautifulSoup(chapter.get_attribute('innerHTML'), 'html.parser')
+            chapter_number = soup.find('span', class_='font-bold self-center whitespace-nowrap')
+            if chapter_number:
+                return chapter_number.text.split(' ')[1]         
+            return None
+        except NoSuchElementException:
+            print("Chapter number element not found.")
+            return None
+        except Exception as e:
+            logger.error(f"Error extracting chapter number: {e}")
+
+
 
     def extract_chapter_info(self, chapter):
             """
@@ -193,6 +220,7 @@ class MangaDownloader:
             """
 
             chapter_link_elements = self.find_chapter_link(chapter)
+            chapter_number = self.extract_chapter_number(chapter)
             
             if  chapter_link_elements is None:
                 return None
@@ -202,6 +230,8 @@ class MangaDownloader:
             # split the text into a list of strings and get the first element
             chapter_name = chapter_link_elements.text.split('\n')[0]
             
+            
+                
             link = chapter_link_elements.find_element(
                 by=By.TAG_NAME, value=Config.HYPERLINK).get_attribute(Config.HREF)
 
@@ -210,14 +240,14 @@ class MangaDownloader:
 
             # remove leading and trailing spaces
             chapter_info = {
-                'chapter_number': chapter_name,
+                'chapter_number': chapter_number if chapter_number else None,
                 'chapter_name': chapter_name,
                 'chapter_link': link
             }    
-            
+            print(chapter_info)
             return chapter_info if chapter_info else None
 
-            
+    
 
     def extract_chapter_id(self, page_url):
             """
