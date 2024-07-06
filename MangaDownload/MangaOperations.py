@@ -404,9 +404,7 @@ class MangaDownloader:
             list: A list of tuples containing page numbers and URLs.
         """
         pages = []
-        logs = self.web_interactions.driver.get_log('performance')
-
-        for log in logs:
+        for log in self.web_interactions.driver.get_log('performance'):
             message = json.loads(log['message'])['message']
             response = message.get('params', {}).get('response', {})
             url = response.get('url')
