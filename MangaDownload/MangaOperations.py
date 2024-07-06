@@ -86,8 +86,7 @@ class MangaDownloader:
         chapters_array = []
 
         while True:
-            chapter_cards = self.web_interactions.driver.find_elements(By.CLASS_NAME, Config.CHAPTER_CARDS)
-            chapters_array += self.process_chapter_cards(chapter_cards)
+            chapters_array += self.process_chapter_cards(self.web_interactions.driver.find_elements(By.CLASS_NAME, Config.CHAPTER_CARDS))
 
             if not self.web_interactions.click_next_page():
                 break
@@ -111,23 +110,7 @@ class MangaDownloader:
             chapter = self.extract_chapter_info(card)
             chapters.append(chapter)
         return chapters
-
-    def extract_chapter_info(self, card):
-        """
-        Extracts chapter information from a chapter card element.
-
-        :param card: The chapter card element.
-        :type card: WebElement
-        :return: A dictionary with chapter information.
-        :rtype: dict
-        """
-        # Placeholder for extracting chapter information
-        # Implement the actual extraction logic based on the structure of chapter card elements
-        return {
-            'chapter_number': None,  # Replace with actual extraction logic
-            # Add other fields as necessary
-        }
-
+    
     def fill_missing_chapter_numbers(self, chapters_array):
         """
         Fills missing chapter numbers in the chapters array.
@@ -166,7 +149,6 @@ class MangaDownloader:
                 # Check if the chapter number has already been added
                 if chapter_info and chapter_info["chapter_name"] != self.previous_chapter_name:
                     chapters_array.append(chapter_info)
-                    #self.added_chapter_numbers.add(chapter_info["chapter_number"])
                     self.previous_chapter_name = chapter_info["chapter_name"]
             except NoSuchElementException as e:
                 logger.error(f"Error while fetching chapter: {e}")
@@ -227,8 +209,7 @@ class MangaDownloader:
 
     def extract_chapter_number(self, chapter):
         try:            
-            soup = BeautifulSoup(chapter.get_attribute('innerHTML'), 'html.parser')
-            chapter_number = soup.find('span', class_='font-bold self-center whitespace-nowrap')
+            chapter_number = BeautifulSoup(chapter.get_attribute('innerHTML'), 'html.parser').find('span', class_='font-bold self-center whitespace-nowrap')
             if chapter_number:
                 return chapter_number.text.split(' ')[1]         
             return None
@@ -253,23 +234,17 @@ class MangaDownloader:
             """
 
             chapter_link_elements, link = self.find_chapter_link(chapter)
-            chapter_number = self.extract_chapter_number(chapter)
-            
             if  chapter_link_elements is None:
                 return None
-            
-            
-                
             # split the text into a list of strings and get the first element
             chapter_name = chapter_link_elements.text.split('\n')[0]
 
             # remove leading and trailing spaces
             chapter_info = {
-                'chapter_number': chapter_number if chapter_number else None,
+                'chapter_number': None,
                 'chapter_name': chapter_name,
                 'chapter_link': link
             }    
-            print(chapter_info)
             return chapter_info if chapter_info else None
 
     
@@ -496,27 +471,12 @@ class MangaDownloader:
                 raise StopIteration
             return True
 
-    def find_mangas_name(self, name):
-        try:
-            # Navigate to the mangadex website with the search query
-           
-            # Find all the manga titles corresponding to the input
-            # Return the manga titles and their links
-            
-            # If no manga titles are found, return None
-            
-            # If an error occurs, raise an exception
-            return fetch_and_process_manga_cards(self.web_interactions.driver, name)
-        except Exception as e:
-            logger.error(f"Error finding mangas: {e}")
-            raise
     
-
     def search_and_select_manga(self):
         try:
             # Ask the user to enter the name of the manga
             name = input("Enter the name of the manga: ")
-            mangas = self.find_mangas_name(name)
+            mangas = fetch_and_process_manga_cards(self.web_interactions.driver, name)
             
             if mangas:
                 print("Search results:")

@@ -2,7 +2,7 @@ import re
 import time
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
-
+from selenium.webdriver.support.ui import WebDriverWait
 from tqdm import tqdm  # Import tqdm for the progress bar
 import random
 from Config.config import Config
@@ -36,20 +36,21 @@ def navigate_to_manga_url(driver, manga_url):
     driver.get(manga_url)  # Navigate to the manga url
 
 
-def wait_for_page_to_load(driver, min_wait=2, max_wait=3):
+def wait_for_page_to_load(driver, timeout=5):
     """
-    Wait for the page to load using implicit wait.
+    Waits for the page to load by checking if the manga cards are present.
 
     Args:
-        driver: The webdriver instance.
-        min_wait (float): The minimum wait time in seconds.
-        max_wait (float): The maximum wait time in seconds.
+        driver: The Selenium WebDriver instance.
 
     Returns:
         None
     """
-    driver.implicitly_wait(random.uniform(min_wait, max_wait))
 
+    # Wait until the manga cards are present on the page
+    WebDriverWait(driver, timeout).until(
+        lambda d: d.find_elements(by=By.CLASS_NAME, value
+        ='manga-card'))
 
 def find_manga_cards(driver):
     """
@@ -75,11 +76,9 @@ def fetch_manga_cards(driver, manga_name):
     Returns:
         A list of manga cards found on the page.
     """
-    manga_url = format_manga_url(manga_name)  # Format the manga url
-    navigate_to_manga_url(driver, manga_url)  # Navigate to the manga url
+    navigate_to_manga_url(driver, format_manga_url(manga_name))  # Navigate to the manga url
     wait_for_page_to_load(driver)  # Wait for the page to load
-    manga_cards = find_manga_cards(driver)  # Find the manga cards on the page
-    return manga_cards  # Return the manga cards
+    return find_manga_cards(driver)  # Return the manga cards
 
 
 def get_manga_link(manga_card):
@@ -161,7 +160,7 @@ def get_manga_description(manga_info_list):
     return manga_info_list[-1] if manga_info_list else None
 
 
-def create_manga_dict(title, link, status, desc):
+def create_manga_dict(title, link):
     """
     Create a dictionary with manga information.
 
@@ -177,8 +176,6 @@ def create_manga_dict(title, link, status, desc):
     return {
         'title': title,
         'link': link,
-        'status': status,
-        'desc': desc,
     }
 
 
@@ -198,17 +195,7 @@ def extract_manga_info(manga_card):
         manga_card)  # Get the manga info list
     if manga_info_list:
         manga_title = get_manga_title(manga_info_list)  # Get the manga title
-        manga_rating = get_manga_rating(
-            manga_info_list)  # Get the manga rating
-        manga_status = get_manga_status(
-            manga_info_list)  # Get the manga status
-        manga_desc = get_manga_description(
-            manga_info_list)  # Get the manga description
-
-        if manga_rating:
-            # Return the manga info if the manga rating is not None
-            return create_manga_dict(manga_title, manga_link, manga_status, manga_desc)
-        return None
+        return create_manga_dict(manga_title, manga_link)
 
 
 def fetch_and_process_manga_cards(driver, manga_name):
@@ -231,7 +218,6 @@ def fetch_and_process_manga_cards(driver, manga_name):
         if manga_info:  # Check if the manga info is not None
             # Append the manga info to the manga array
             manga_array.append(manga_info)
-
     return manga_array  # Return the manga array
 
 
