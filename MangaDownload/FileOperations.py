@@ -49,21 +49,21 @@ class FileOperations:
         self.last_loaded_img_src = None
 
     def sanitize_folder_name(self, folder_name):
-        """Function to sanitize the folder name. This means that the folder name will be stripped of any characters that are not allowed in a folder name.
+        """
+        Sanitize the folder name by removing or replacing any characters that are not allowed in a folder name.
 
         Args:
-            folder_name (string): The folder name to sanitize. 
+            folder_name (str): The folder name to sanitize.
 
         Returns:
-            string: The sanitized folder name.
+            str: The sanitized folder name.
         """
-        # Replace characters not allowed in a folder name with a space
-        sanitized_name = re.sub(r'[<>:"/\\|?*]', ' ', folder_name)
-        sanitized_name = sanitized_name.strip()  # Remove leading and trailing spaces
-        if not sanitized_name:
-            # Set the folder name to "UnknownManga" if it's empty
-            sanitized_name = "UnknownManga"
-        return sanitized_name
+        # Replace invalid characters with a space and strip leading/trailing spaces
+        sanitized_name = re.sub(r'[<>:"/\\|?*]', ' ', folder_name).strip()
+
+        # Set the folder name to "UnknownManga" if it is empty after sanitization
+        return sanitized_name if sanitized_name else "UnknownManga"
+
 
     def create_folder_path(self, save_path, sanitized_folder_name, chapter_number):
         """Function to generate the folder path. This will be used to save the manga chapters.
@@ -102,47 +102,71 @@ class FileOperations:
         return os.path.join(folder_path, screenshot_filename)
 
     def create_chapter_folder(self, save_path, series_name, chapter_number, page_number=None):
-        """Function to create the folder path and screenshot filepath for a chapter.
+        """
+        Creates the folder path for a chapter and optionally the screenshot filepath for a page.
         This function also creates the folder if it doesn't exist.
 
-
         Args:
-            save_path (string): The path to save the manga.
-            series_name (string): The name of the manga series.
-            chapter_number (string): The chapter number. (ex: Chapter 1)
+            save_path (str): The path to save the manga.
+            series_name (str): The name of the manga series.
+            chapter_number (str): The chapter number. (e.g., Chapter 1)
             page_number (int, optional): The page number. Defaults to None.
 
         Returns:
-            _type_: _description_
+            tuple: A tuple containing the folder path and optionally the screenshot filepath.
         """
-        folder_path = self.create_folder_path(
-            save_path, self.sanitize_folder_name(series_name), "Chapter " + str(chapter_number))  # Create the folder path
-
-        if not os.path.exists(folder_path):  # If the folder doesn't exist
-            os.makedirs(folder_path)   # Create the folder if it doesn't exist
-
-        if page_number is not None:  # If the page number is provided
-            screenshot_filename = self.create_screenshot_filename(
-                page_number)  # Create the screenshot filename
-            screenshot_filepath = self.create_screenshot_filepath(
-                folder_path, screenshot_filename)  # Create the screenshot filepath
-            # Return the folder path and screenshot filepath
-            # screenshot_filepath is used in the delete_last_page function
-            return folder_path, screenshot_filepath
-        else:
-            return folder_path  # Return the folder path
+        # Sanitize the series name and create the folder path
+        folder_path = self.create_folder_path(save_path, self.sanitize_folder_name(series_name), f"Chapter {chapter_number}")
+        # Create the folder if it doesn't exist
+        os.makedirs(folder_path, exist_ok=True)
+        # If page number is provided, create the screenshot filepath
+        if page_number:
+            return folder_path, self.create_screenshot_filepath(folder_path, self.create_screenshot_filename(page_number))
+        return folder_path
 
     def save_png_links(self, save_path, series_name, chapter_number, page_number, img_src):
-        folder_path, _ = self.create_chapter_folder(save_path, series_name, chapter_number, page_number)
-        self.save_image_from_url(img_src, folder_path, self.create_screenshot_filename(page_number))
-        return page_number + 1
+        """
+        Save a PNG image from a URL to the specified folder path, using the chapter and page numbers.
+
+        Args:
+            save_path (str): The path to save the manga.
+            series_name (str): The name of the manga series.
+            chapter_number (int or str): The chapter number.
+            page_number (int): The page number.
+            img_src (str): The URL of the PNG image to save.
+
+        Returns:
+            int: The next page number.
+        """
+        try:
+            folder_path, _ = self.create_chapter_folder(save_path, series_name, chapter_number, page_number)
+            self.save_image_from_url(img_src, folder_path, self.create_screenshot_filename(page_number))
+            return page_number + 1
+        except Exception as e:
+            logger.error(f"Error saving PNG link {img_src} for chapter {chapter_number}, page {page_number}: {e}")
+            return page_number  # Return the current page number if there's an error
 
     def save_image_from_url(self, img_src, folder_path, file_name):
-        response = requests.get(img_src)
-        if response.status_code == 200:
-            image = Image.open(io.BytesIO(response.content))
-            image.save(os.path.join(folder_path, file_name))
-            return True
-        else:
-            return False
+        """
+        Downloads an image from the given URL and saves it to the specified folder with the given file name.
 
+        Args:
+            img_src (str): The URL of the image to download.
+            folder_path (str): The path to the folder where the image will be saved.
+            file_name (str): The name to save the image file as.
+
+        Returns:
+            bool: True if the image was successfully saved, False otherwise.
+        """
+        try:
+            response = requests.get(img_src)
+            response.raise_for_status()  # Raise an HTTPError if the HTTP request returned an unsuccessful status code
+            # Save the image to the specified folder
+            Image.open(io.BytesIO(response.content)).save(os.path.join(folder_path, file_name))
+            return True
+        except requests.RequestException as e:
+            logger.error(f"Error downloading image from {img_src}: {e}")
+            return False
+        except IOError as e:
+            logger.error(f"Error saving image to {os.path.join(folder_path, file_name)}: {e}")
+            return False

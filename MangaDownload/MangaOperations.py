@@ -66,9 +66,8 @@ class MangaDownloader:
         chapters_array = []
 
         try:
-            self.web_interactions.wait_for_chapter_cards()
+            self.web_interactions.wait_until((By.CLASS_NAME, Config.CHAPTER_CARDS), multiple=True)
             chapters_array = self.collect_chapters()
-
             self.fill_missing_chapter_numbers(chapters_array)
         except Exception as e:
             logger.error(f"Error fetching chapters: {e}")
@@ -94,23 +93,7 @@ class MangaDownloader:
             self.web_interactions.wait_until_page_loaded(1)
 
         return chapters_array
-
-    def process_chapter_cards(self, chapter_cards):
-        """
-        Processes the chapter cards and extracts chapter information.
-
-        :param chapter_cards: List of chapter card elements.
-        :type chapter_cards: list
-        :return: A list of chapter objects.
-        :rtype: list
-        """
-        chapters = []
-        for card in chapter_cards:
-            # Extract chapter details from the card
-            chapter = self.extract_chapter_info(card)
-            chapters.append(chapter)
-        return chapters
-    
+  
     def fill_missing_chapter_numbers(self, chapters_array):
         """
         Fills missing chapter numbers in the chapters array.
@@ -119,14 +102,13 @@ class MangaDownloader:
         :type chapters_array: list
         """
         for i, chapter in enumerate(chapters_array):
-            if chapter['chapter_number'] is None:
-                if i > 0 and chapters_array[i - 1]['chapter_number'] is not None:
+            if 'chapter_number' not in chapter or chapter['chapter_number'] is None:
+                if i > 0 and 'chapter_number' in chapters_array[i - 1] and chapters_array[i - 1]['chapter_number'] is not None:
                     chapter['chapter_number'] = chapters_array[i - 1]['chapter_number'] - 1
-                elif i < len(chapters_array) - 1 and chapters_array[i + 1]['chapter_number'] is not None:
+                elif i < len(chapters_array) - 1 and 'chapter_number' in chapters_array[i + 1] and chapters_array[i + 1]['chapter_number'] is not None:
                     chapter['chapter_number'] = chapters_array[i + 1]['chapter_number'] + 1
                 else:
                     chapter['chapter_number'] = len(chapters_array) - i
-
 
     def process_chapter_cards(self, chapter_cards):
         """
@@ -150,6 +132,7 @@ class MangaDownloader:
                 if chapter_info and chapter_info["chapter_name"] != self.previous_chapter_name:
                     chapters_array.append(chapter_info)
                     self.previous_chapter_name = chapter_info["chapter_name"]
+                    print(f"Added chapter: {chapter_info['chapter_number']}, {chapter_info['chapter_name']}")
             except NoSuchElementException as e:
                 logger.error(f"Error while fetching chapter: {e}")
             except Exception as e:
@@ -228,7 +211,6 @@ class MangaDownloader:
 
             # remove leading and trailing spaces
             chapter_info = {
-                'chapter_number': None,
                 'chapter_name': chapter_name,
                 'chapter_link': link
             }    
@@ -394,7 +376,9 @@ class MangaDownloader:
         pages = []
         for attempt in range(max_attempts):
             print(f"Attempt {attempt + 1} to capture network logs...")
-            pages = self.capture_network_logs(re.compile(r"^https://.*mangadex\.network/data/.*\.png$"))
+            regex = re.compile(r"^https://.*mangadex\.network/data/.*\.(png|jpg)$")
+
+            pages = self.capture_network_logs(regex)
             if pages and pages[0][0] == 1:
                 break
             else:
@@ -420,7 +404,6 @@ class MangaDownloader:
             if url and png_pattern.match(url):
                 page_number = int(url.split('/')[-1].split('-')[0])
                 pages.append((page_number, url))
-
         return sorted(pages, key=lambda x: x[0])
 
     def save_chapter_pages(self, series_name, chapter_number, pages):
