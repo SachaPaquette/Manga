@@ -18,7 +18,12 @@ from Config.logs_config import setup_logging
 from Driver.driver_config import driver_setup
 logger = setup_logging('manga_download', Config.MANGA_DOWNLOAD_LOG_PATH)
 
+from enum import Enum
 
+class WaitCondition(Enum):
+    FIRST_PAGE = 1
+    PAGE_WRAP = 2
+    
 class WebInteractions:
     _instance = None  # Singleton instance
 
@@ -65,29 +70,60 @@ class WebInteractions:
     def press_right_arrow_key(self):
         ActionChains(self.driver).send_keys(
                     Keys.ARROW_RIGHT).perform()
+
     def click_next_page(self):
         try:
-
-            # Check if the next page button is clickable and click it
-            if self.is_button_clickable(self.driver.find_element(By.CLASS_NAME, Config.NEXT_PAGE_BUTTON)):
-                ActionChains(self.driver).move_to_element(self.driver.find_element(
-                    By.CLASS_NAME, Config.NEXT_PAGE_BUTTON)).click().perform()
-                return True
+            # Find the next page button
+            next_page_button = self.driver.find_element(By.CLASS_NAME, Config.NEXT_PAGE_BUTTON)
+            
+            # Check if the next page button exists on the page
+            if next_page_button:
+                # Check if the next page button is clickable
+                if self.is_button_clickable(next_page_button):
+                    # Click the next page button using ActionChains
+                    ActionChains(self.driver).move_to_element(next_page_button).click().perform()
+                    return True
+                else:
+                    # Button is disabled, print message and return False
+                    print("Last page reached. Stopping.")
+                    return False
             else:
-                # Button is disabled, return False to break out of the loop
-                print("Last page reached. Stopping.")
+                # Next page button not found, print message and return False
+                print("Next page button not found.")
                 return False
 
+        except NoSuchElementException:
+            # Handle element not found exception
+            logger.error("Next page button not found")
+            return False
+
         except ElementClickInterceptedException as e:
+            # Handle click interception exception
             logger.error(f"Element click intercepted: {e}")
             return False
 
         except Exception as e:
+            # Handle other unexpected exceptions
             logger.error(f"Error clicking next page button: {e}")
             return False
+
+    def wait_until(self, condition, timeout=10, multiple=False):
+        if multiple:
+            WebDriverWait(self.driver, timeout).until(
+                EC.presence_of_all_elements_located(
+                    condition
+                )
+            )
+        else:
+            WebDriverWait(self.driver, timeout).until(
+                EC.presence_of_element_located(
+                    condition
+                )
+            )
+            
     
     def wait_for_next_page(self):
-        WebDriverWait(self.driver, 10).until(
+        WebDriverWait(self.driver, 5).until(
             EC.presence_of_all_elements_located(
                 (By.CLASS_NAME, Config.CHAPTER_CARDS))
         )
@@ -95,11 +131,11 @@ class WebInteractions:
     def wait_for_chapter_cards(self):
         try:
             while True:
-                # Wait for the chapter cards to load and be visible
-                WebDriverWait(self.driver, 20).until(
-                    EC.presence_of_all_elements_located(
+                # Wait until one chapter card is loaded
+                WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located(
                         (By.CLASS_NAME, Config.CHAPTER_CARDS))
-                )
+                )       
                 break
         except TimeoutException:
             logger.error("Timed out waiting for chapter cards to load")
@@ -111,24 +147,25 @@ class WebInteractions:
             logger.error(f"Error while waiting for chapter cards: {e}")
             raise
 
-    def wait_until_page_loaded(self):
+    def wait_until_page_loaded(self, wait_condition):
         """
-        Wait until a specific element is loaded on the page.
+        Wait until a specific element is loaded on the page based on the given wait condition.
 
-        Parameters:
-        driver (webdriver): The Selenium webdriver object.
-        timeout (int): The maximum time to wait in seconds.
-        element_id (str): The ID of the element to wait for.
+        Args:
+            wait_condition (WaitCondition): The condition to wait for after navigation.
 
-        Returns:
-        None
+        Raises:
+            TimeoutException: If the element is not loaded within the specified timeout.
         """
         try:
-            WebDriverWait(self.driver, 2).until(
-                EC.presence_of_element_located(
-                    (By.CLASS_NAME, Config.PAGE_WRAP))
-            )
-            
+            if wait_condition == WaitCondition.FIRST_PAGE.value:
+                WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((By.CLASS_NAME, 'chapter-grid.flex-grow'))
+                )
+            elif wait_condition == WaitCondition.PAGE_WRAP.value:
+                WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((By.CLASS_NAME, Config.PAGE_WRAP))
+                )
         except TimeoutException:
             logger.error("Timed out waiting for page to load")
 
@@ -198,7 +235,7 @@ class WebInteractions:
             while retries < max_retries:
                 try:
                     # Wait for the page to load
-                    self.wait_until_page_loaded()
+                    self.wait_until_page_loaded(2)
 
                     # Check if the manga image is present
                     manga_images = self.find_multiple_elements(By.CLASS_NAME, Config.MANGA_IMAGE, None)
@@ -226,7 +263,7 @@ class WebInteractions:
             logger.error(f"Error while checking if element exists: {e}")
             
 
-    def naviguate(self, url):
+    def naviguate(self, url, wait_conddition=None):
             """
             Navigates to the specified URL using the Selenium WebDriver instance associated with this object.
 
@@ -237,8 +274,9 @@ class WebInteractions:
                 Exception: If an error occurs while navigating to the specified URL.
             """
             try:
-                self.driver.get(url)   
-                self.wait_until_page_loaded()   
+                self.driver.get(url)
+                if wait_conddition:
+                    self.wait_until_page_loaded(wait_conddition)   
             except Exception as e:
                 logger.error(f"Error while navigating to {url}: {e}")
                 
@@ -280,8 +318,16 @@ class WebInteractions:
         else:
             return self.driver.find_element(by=by_type, value=value)
         
-    def wait_until_element_loaded(self, type_name, value):
+    def wait_until_element_loaded(self, type_name, value, timeout=10):
+        """
+        Waits until the specified element is loaded on the page.
+
+        Args:
+            type_name (str): The type of element to search for (e.g., 'id', 'class_name', 'xpath').
+            value (str): The value associated with the type of element.
+            timeout (int): The maximum time to wait for the element to be loaded.
+        """
         by_type = getattr(By, type_name.replace(' ', '_').upper())
-        WebDriverWait(self.driver, 10).until(
+        WebDriverWait(self.driver, timeout).until(
             EC.presence_of_element_located((by_type, value))
         )

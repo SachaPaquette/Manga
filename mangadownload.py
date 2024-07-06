@@ -29,7 +29,7 @@ def main():
                 manga_downloader.print_chapter_info(chapter) # Print the chapter number and name
                 manga_downloader.download_images_from_chapter(chapter['chapter_link'], series_name, chapter['chapter_number'])   
     except KeyboardInterrupt as e:
-        exit()
+        exit(0)
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
     finally:

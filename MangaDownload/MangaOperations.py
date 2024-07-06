@@ -61,29 +61,30 @@ class MangaDownloader:
         :return: A list of chapter objects.
         :return type: list
         """
-        logger.info(f"Fetching chapters for link: {link}")
-        self.web_interactions.naviguate(link)  # Navigate to the link
+        print("Fetching chapters...")
+        self.web_interactions.naviguate(link, wait_conddition=1)
         try:
+            print("Fetching chapters...")
             self.web_interactions.wait_for_chapter_cards()
+            print("Chapter cards found.")
             # Check if there are chapters on the page
             chapter_cards = self.web_interactions.driver.find_elements(
                 by=By.CLASS_NAME, value=Config.CHAPTER_CARDS)
             
             # Loop while there are still chapters to fetch
-            
+            print("Processing chapters...")
             chapters_array = self.process_chapter_cards(chapter_cards)
-          
+            print(f"Found {len(chapters_array)} chapters.")
             while True:  
                 
                 if not self.web_interactions.click_next_page():  # Check the return value
                     break
 
-                self.web_interactions.wait_for_next_page()  # Wait for the next page to load
+                self.web_interactions.wait_until(condition=(By.CLASS_NAME, Config.CHAPTER_CARDS), timeout=10, multiple=True)
                 chapter_cards = self.web_interactions.driver.find_elements(
                     by=By.CLASS_NAME, value=Config.CHAPTER_CARDS)  # Find all the chapter cards on the page
                 # Process the chapter cards and append the results to the array
-                chapters_array += self.process_chapter_cards(
-                    chapter_cards)
+                chapters_array += self.process_chapter_cards(chapter_cards)
 
             print(f"Found {len(chapters_array)} chapters.")
             print(chapters_array)        
@@ -97,11 +98,6 @@ class MangaDownloader:
                         chapter['chapter_number'] = chapters_array[i + 1]['chapter_number'] + 1
                     else:
                         chapter['chapter_number'] = len(chapters_array) - i
-            
-                    
-                        
-                
-            
         except Exception as e:
             logger.error(f"Error fetching chapters: {e}")
             raise
@@ -167,7 +163,7 @@ class MangaDownloader:
             chapter: The chapter element to search for links and flag images.
 
         Returns:
-            The chapter link element corresponding to the English title, or None if not found.
+            A tuple (link element, link URL) corresponding to the English title, or None if not found.
         """
         try:
             # Find all chapter link elements within the chapter
@@ -178,17 +174,16 @@ class MangaDownloader:
                     # Check if the link has an image element with title attribute 'English'
                     img_element = link.find_element(by=By.TAG_NAME, value=Config.IMG)
                     if img_element.get_attribute('title') == 'English':
-                        return link
+                        links = link.find_element(by=By.TAG_NAME, value=Config.HYPERLINK).get_attribute(Config.HREF)
+                        if links and self.unsupported_website(links):
+                            return link, links
                 except NoSuchElementException:
                     continue
             
             return None
-
-        except NoSuchElementException as e:
-            print(f"NoSuchElementException encountered: {e}")
-            return None
+        
         except Exception as e:
-            print(f"Error finding chapter link: {e}")
+            logger.error(f"Error finding chapter link: {e}")
             return None
 
 
@@ -219,7 +214,7 @@ class MangaDownloader:
                 chapter name, and chapter link. Returns None if the chapter information could not be extracted.
             """
 
-            chapter_link_elements = self.find_chapter_link(chapter)
+            chapter_link_elements, link = self.find_chapter_link(chapter)
             chapter_number = self.extract_chapter_number(chapter)
             
             if  chapter_link_elements is None:
@@ -229,14 +224,6 @@ class MangaDownloader:
                 
             # split the text into a list of strings and get the first element
             chapter_name = chapter_link_elements.text.split('\n')[0]
-            
-            
-                
-            link = chapter_link_elements.find_element(
-                by=By.TAG_NAME, value=Config.HYPERLINK).get_attribute(Config.HREF)
-
-            # check if the website is supported
-            link = self.unsupported_website(link)
 
             # remove leading and trailing spaces
             chapter_info = {
@@ -297,14 +284,6 @@ class MangaDownloader:
             logger.warning(
                 f"Folder for {chapter_number} already exists. Exiting.")
             
-    def long_manga(self, long_screenshot_taken, series_name, chapter_number):
-        long_screenshot_taken = True # Set the long screenshot boolean variable to True to prevent taking another long screenshot
-
-        # Process long manga differently
-        self.file_operations.save_long_screenshot(
-        self.web_interactions.driver, self.save_path, series_name, chapter_number, None)
-        return long_screenshot_taken
-    
     def download_images_from_chapter(self, chapter_link, series_name, chapter_number):
         try:
             if os.path.exists(self.prepare_save_path(series_name, "Chapter " + str(chapter_number))):
@@ -313,8 +292,6 @@ class MangaDownloader:
                 return
 
             self.navigate_to_chapter(chapter_link)
-            #previous_chapter_id = self.extract_chapter_id(chapter_link)
-            #is_long_manga = Config.LONG_MANGA_IMAGE in self.web_interactions.check_element_exists()
             self.process_chapter(series_name, chapter_number)
 
         except NoSuchElementException as e:
@@ -327,8 +304,8 @@ class MangaDownloader:
             pass
 
     def prepare_save_path(self, series_name, chapter_number):
-        sanitized_folder_name = self.file_operations.sanitize_folder_name(series_name)
-        return os.path.join(self.save_path, sanitized_folder_name, str(chapter_number))
+        return os.path.join(self.save_path, self.file_operations.sanitize_folder_name(series_name), str(chapter_number))
+
 
     def navigate_to_chapter(self, chapter_link):
         """
@@ -337,9 +314,68 @@ class MangaDownloader:
         Args:
             chapter_link (str): The URL of the chapter to navigate to.
         """
-        self.web_interactions.naviguate(chapter_link)
-        time.sleep(3)  # Wait for the page to load
-        self.web_interactions.wait_until_element_loaded(By.CSS_SELECTOR, 'body')
+        self.web_interactions.naviguate(chapter_link, wait_conddition=1)
+        
+        # Inject the network monitoring JavaScript
+        self.inject_network_monitoring_js()
+        
+        # Retry up to 3 times
+        for _ in range(3):
+            try:
+                self.web_interactions.wait_until_element_loaded('class_name', 'overflow-x-auto.flex.items-center.h-full')
+                self.wait_for_network_idle()  # Ensure all network requests are completed
+                break  # If successful, exit the loop
+            except TimeoutException:
+                logger.warning("Timeout occurred. Retrying...")
+                time.sleep(2)
+        else:
+            # If all retries failed
+            logger.error("Failed to navigate to chapter after multiple attempts.")
+
+    def inject_network_monitoring_js(self):
+        script = """
+        (function() {
+            let open = XMLHttpRequest.prototype.open;
+            let send = XMLHttpRequest.prototype.send;
+            let fetch = window.fetch;
+            let activeRequests = 0;
+            let addRequest = () => activeRequests++;
+            let removeRequest = () => {
+                activeRequests = Math.max(0, activeRequests - 1);
+            };
+            XMLHttpRequest.prototype.open = function() {
+                addRequest();
+                this.addEventListener('load', removeRequest);
+                this.addEventListener('error', removeRequest);
+                this.addEventListener('abort', removeRequest);
+                return open.apply(this, arguments);
+            };
+            XMLHttpRequest.prototype.send = function() {
+                return send.apply(this, arguments);
+            };
+            window.fetch = function() {
+                addRequest();
+                return fetch.apply(this, arguments)
+                    .then(response => {
+                        removeRequest();
+                        return response;
+                    })
+                    .catch(error => {
+                        removeRequest();
+                        throw error;
+                    });
+            };
+            window.getActiveRequests = function() {
+                return activeRequests;
+            };
+        })();
+        """
+        self.web_interactions.driver.execute_script(script)
+
+    def wait_for_network_idle(self, timeout=30, poll_frequency=0.5):
+        WebDriverWait(self.web_interactions.driver, timeout, poll_frequency=poll_frequency).until(
+            lambda driver: driver.execute_script('return window.getActiveRequests() === 0')
+        )
 
 
     def process_chapter(self, series_name, chapter_number):
@@ -353,32 +389,55 @@ class MangaDownloader:
         Returns:
             None
         """
-        # Initialize the page number and long screenshot taken variables
-        page_number = 1
-        # Regex pattern to match blob URLs
-        blob_pattern = re.compile(r"^blob:.*$")
-        # Regex pattern to match PNG URLs and ignore the rest
-        png_pattern = re.compile(r"^https://.*mangadex\.network/data/.*\.png$")
-        pages = []
-
-            # Get the network logs
-        for log in self.web_interactions.driver.get_log('performance'):
-            if 'response' in json.loads(log['message'])['message']['params']:
-                response = json.loads(log['message'])['message']['params']['response']
+        try:
                 
-                if response.get('url'):
-                    blob_match = blob_pattern.match(response['url'])
-                    png_match = png_pattern.match(response['url'])
-                    if png_match:
-                        
-                        page_number = int(response['url'].split('/')[-1].split('-')[0])
-                        pages.append((page_number, response['url']))
+            # Initialize the page number and long screenshot taken variables
+            page_number = 1
+            # Regex pattern to match blob URLs
+            blob_pattern = re.compile(r"^blob:.*$")
+            # Regex pattern to match PNG URLs and ignore the rest
+            png_pattern = re.compile(r"^https://.*mangadex\.network/data/.*\.png$")
+            pages = []
 
-        
-        sorted_pages = sorted(pages, key=lambda x: x[0])
-        for page_number, page_url in sorted_pages:
-            self.file_operations.save_png_links(self.save_path, series_name, chapter_number, page_number, page_url)
+            # Retry mechanism to ensure all network logs are captured
+            for attempt in range(5):
+                print(f"Attempt {attempt + 1} to capture network logs...")
+                pages.clear()
 
+                # Fetch network logs and filter them in a single pass
+                logs = self.web_interactions.driver.get_log('performance')
+                for log in logs:
+                    message = json.loads(log['message'])['message']
+                    response = message.get('params', {}).get('response', {})
+                    url = response.get('url')
+                    if url and png_pattern.match(url):
+                        page_number = int(url.split('/')[-1].split('-')[0])
+                        pages.append((page_number, url))
+
+                # Sort pages by page number
+                sorted_pages = sorted(pages, key=lambda x: x[0])
+
+                # Check if we have captured all pages
+                if sorted_pages and sorted_pages[0][0] == 1:
+                    break
+                else:
+                    print("Failed to capture all pages, retrying...")
+                    time.sleep(2)  # Wait before retrying
+
+            # Check if we captured pages for the current chapter
+            if not sorted_pages:
+                logger.error(f"Failed to capture any pages for chapter {chapter_number} of {series_name}.")
+                return
+
+            # Save the PNG links
+            for page_number, page_url in sorted_pages:
+                print(f"Saving page {page_number} for chapter {chapter_number}...")
+                print(page_url)
+                self.file_operations.save_png_links(self.save_path, series_name, chapter_number, page_number, page_url)
+
+        except Exception as e:
+            logger.error(f"Error processing chapter: {e}")
+            raise
 
 
     def handle_error(self):
