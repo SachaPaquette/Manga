@@ -282,7 +282,7 @@ class MangaDownloader:
         Args:
             chapter_link (str): The URL of the chapter to navigate to.
         """
-        self.web_interactions.naviguate(chapter_link, wait_condition=1)
+        self.web_interactions.naviguate(chapter_link)
         
         # Inject the network monitoring JavaScript
         self.inject_network_monitoring_js()
@@ -341,9 +341,22 @@ class MangaDownloader:
         self.web_interactions.driver.execute_script(script)
 
     def wait_for_network_idle(self, timeout=30, poll_frequency=0.5):
-        WebDriverWait(self.web_interactions.driver, timeout, poll_frequency=poll_frequency).until(
-            lambda driver: driver.execute_script('return window.getActiveRequests() === 0')
-        )
+        """
+        Wait until the network is idle, i.e., no active network requests.
+
+        Args:
+            timeout (int): Maximum time to wait in seconds.
+
+        Returns:
+            bool: True if the network became idle, False if timed out.
+        """
+        end_time = time.time() + timeout
+        while time.time() < end_time:
+            active_requests = self.web_interactions.driver.execute_script("return window.getActiveRequests();")
+            if active_requests == 0:
+                return True
+            time.sleep(poll_frequency)
+        return False
 
 
     def process_chapter(self, series_name, chapter_number):
@@ -378,19 +391,15 @@ class MangaDownloader:
         Returns:
             list: A list of tuples containing page numbers and URLs.
         """
-        png_pattern = re.compile(r"^https://.*mangadex\.network/data/.*\.png$")
         pages = []
-
         for attempt in range(max_attempts):
             print(f"Attempt {attempt + 1} to capture network logs...")
-            pages = self.capture_network_logs(png_pattern)
-
+            pages = self.capture_network_logs(re.compile(r"^https://.*mangadex\.network/data/.*\.png$"))
             if pages and pages[0][0] == 1:
                 break
             else:
                 print("Failed to capture all pages, retrying...")
-                time.sleep(2)
-
+                time.sleep(1)
         return pages
 
     def capture_network_logs(self, png_pattern):
