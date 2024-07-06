@@ -207,19 +207,6 @@ class MangaDownloader:
             return None
 
 
-    def extract_chapter_number(self, chapter):
-        try:            
-            chapter_number = BeautifulSoup(chapter.get_attribute('innerHTML'), 'html.parser').find('span', class_='font-bold self-center whitespace-nowrap')
-            if chapter_number:
-                return chapter_number.text.split(' ')[1]         
-            return None
-        except NoSuchElementException:
-            print("Chapter number element not found.")
-            return None
-        except Exception as e:
-            logger.error(f"Error extracting chapter number: {e}")
-
-
 
     def extract_chapter_info(self, chapter):
             """
@@ -247,38 +234,7 @@ class MangaDownloader:
             }    
             return chapter_info if chapter_info else None
 
-    
 
-    def extract_chapter_id(self, page_url):
-            """
-            Extracts the chapter ID from a given page URL.
-
-            Args:
-                page_url (str): The URL of the page containing the chapter ID.
-
-            Returns:
-                str: The chapter ID extracted from the URL, or None if the URL does not contain a chapter ID.
-            """
-            # Split the URL by the forward slash, e.g. https://mangadex.org/chapter/12345/1 -> ['https:', '', 'mangadex.org', 'chapter', '12345', '1'] -> we want the chapter ID which is the 5th element
-            parts = page_url.split("/")
-            try:
-                index = parts.index("chapter")  # Get the index of the chapter ID
-                if index + 1 < len(parts):
-                    return parts[index + 1]  # Return the chapter ID
-            except ValueError:
-                pass
-            return None
-
-
-    def check_value_none(self, value):
-        try:
-            if value is None:
-                logger.error(f"{value} is None. Exiting.")
-                return 
-        except Exception as e:
-            logger.error(f"Error checking if value is None: {e}")
-            raise
-    
     def create_folder(self, series_name, chapter_number):
         try:
             # Sanitize the folder name (remove characters not allowed in a folder name)
@@ -300,8 +256,7 @@ class MangaDownloader:
     def download_images_from_chapter(self, chapter_link, series_name, chapter_number):
         try:
             if os.path.exists(self.prepare_save_path(series_name, "Chapter " + str(chapter_number))):
-                logger.warning(
-                    f"Folder for {chapter_number} already exists. Exiting.")
+                logger.warning(f"Folder for {chapter_number} already exists. Skipping.")
                 return
 
             self.navigate_to_chapter(chapter_link)
@@ -403,54 +358,80 @@ class MangaDownloader:
             None
         """
         try:
-                
-            # Initialize the page number and long screenshot taken variables
-            page_number = 1
-            # Regex pattern to match blob URLs
-            blob_pattern = re.compile(r"^blob:.*$")
-            # Regex pattern to match PNG URLs and ignore the rest
-            png_pattern = re.compile(r"^https://.*mangadex\.network/data/.*\.png$")
-            pages = []
-
-            # Retry mechanism to ensure all network logs are captured
-            for attempt in range(5):
-                print(f"Attempt {attempt + 1} to capture network logs...")
-                pages.clear()
-
-                # Fetch network logs and filter them in a single pass
-                logs = self.web_interactions.driver.get_log('performance')
-                for log in logs:
-                    message = json.loads(log['message'])['message']
-                    response = message.get('params', {}).get('response', {})
-                    url = response.get('url')
-                    if url and png_pattern.match(url):
-                        page_number = int(url.split('/')[-1].split('-')[0])
-                        pages.append((page_number, url))
-
-                # Sort pages by page number
-                sorted_pages = sorted(pages, key=lambda x: x[0])
-
-                # Check if we have captured all pages
-                if sorted_pages and sorted_pages[0][0] == 1:
-                    break
-                else:
-                    print("Failed to capture all pages, retrying...")
-                    time.sleep(2)  # Wait before retrying
-
-            # Check if we captured pages for the current chapter
-            if not sorted_pages:
+            pages = self.retry_capture_network_logs()
+            if not pages:
                 logger.error(f"Failed to capture any pages for chapter {chapter_number} of {series_name}.")
                 return
 
-            # Save the PNG links
-            for page_number, page_url in sorted_pages:
-                print(f"Saving page {page_number} for chapter {chapter_number}...")
-                print(page_url)
-                self.file_operations.save_png_links(self.save_path, series_name, chapter_number, page_number, page_url)
-
+            self.save_chapter_pages(series_name, chapter_number, pages)
         except Exception as e:
             logger.error(f"Error processing chapter: {e}")
             raise
+
+    def retry_capture_network_logs(self, max_attempts=5):
+        """
+        Retry capturing network logs to ensure all pages are captured.
+
+        Args:
+            max_attempts (int): Maximum number of attempts to capture network logs.
+
+        Returns:
+            list: A list of tuples containing page numbers and URLs.
+        """
+        png_pattern = re.compile(r"^https://.*mangadex\.network/data/.*\.png$")
+        pages = []
+
+        for attempt in range(max_attempts):
+            print(f"Attempt {attempt + 1} to capture network logs...")
+            pages = self.capture_network_logs(png_pattern)
+
+            if pages and pages[0][0] == 1:
+                break
+            else:
+                print("Failed to capture all pages, retrying...")
+                time.sleep(2)
+
+        return pages
+
+    def capture_network_logs(self, png_pattern):
+        """
+        Capture network logs and filter PNG URLs.
+
+        Args:
+            png_pattern (re.Pattern): Compiled regex pattern to match PNG URLs.
+
+        Returns:
+            list: A list of tuples containing page numbers and URLs.
+        """
+        pages = []
+        logs = self.web_interactions.driver.get_log('performance')
+
+        for log in logs:
+            message = json.loads(log['message'])['message']
+            response = message.get('params', {}).get('response', {})
+            url = response.get('url')
+            if url and png_pattern.match(url):
+                page_number = int(url.split('/')[-1].split('-')[0])
+                pages.append((page_number, url))
+
+        return sorted(pages, key=lambda x: x[0])
+
+    def save_chapter_pages(self, series_name, chapter_number, pages):
+        """
+        Save the captured PNG links for the chapter.
+
+        Args:
+            series_name (str): The name of the manga series.
+            chapter_number (int): The number of the chapter.
+            pages (list): A list of tuples containing page numbers and URLs.
+
+        Returns:
+            None
+        """
+        for page_number, page_url in pages:
+            print(f"Saving page {page_number} for chapter {chapter_number}...")
+            print(page_url)
+            self.file_operations.save_png_links(self.save_path, series_name, chapter_number, page_number, page_url)
 
 
     def handle_error(self):
@@ -471,47 +452,93 @@ class MangaDownloader:
                 raise StopIteration
             return True
 
-    
+        
     def search_and_select_manga(self):
         try:
             # Ask the user to enter the name of the manga
-            name = input("Enter the name of the manga: ")
-            mangas = fetch_and_process_manga_cards(self.web_interactions.driver, name)
+            manga_name = self.prompt_manga_name()
+            mangas = self.fetch_and_process_manga_cards(manga_name)
             
-            if mangas:
-                print("Search results:")
-                for i, manga in enumerate(mangas):
-                    print(f"{i + 1}. {manga['title']}")  # Print the manga titles
-
-                selected_index = input(
-                    "Enter the number of the manga you want to download (or '0' to exit): ")  # Ask the user to select a manga
-
-                if selected_index == '0':
-                    print("Exiting.")
-                    return (), ""  # Return an empty tuple and an empty string
-
-                if selected_index.isdigit() and 0 <= int(selected_index) <= len(mangas):
-                    # Get the selected manga
-                    
-                    print(
-                        f"You selected: {mangas[int(selected_index) - 1]['title']}")
-                    # Fetch all the chapters for the selected manga
-                    all_chapters = self.fetch_chapters(mangas[int(selected_index) - 1]['link'])
-                    # Return the chapters and the name of the manga
-                    return all_chapters, mangas[int(selected_index) - 1]['title']
-                else:
-                    # make the user re-enter the number
-                    print("Invalid number. Please enter a valid number.")
-                    return self.search_and_select_manga()
-            else:
-                print("No manga found. Please try again\n")
-
-                # make the user re-enter the name of the manga
+            if not mangas:
+                print("No manga found. Please try again.\n")
                 return self.search_and_select_manga()
+
+            self.display_search_results(mangas)
+
+            selected_index = self.prompt_manga_selection(len(mangas))
+            if selected_index == 0:
+                print("Exiting.")
+                return [], ""
+
+            selected_manga = mangas[selected_index - 1]
+            print(f"You selected: {selected_manga['title']}")
+
+            all_chapters = self.fetch_chapters(selected_manga['link'])
+            return all_chapters, selected_manga['title']
+        
+        except KeyboardInterrupt:
+            print("Exiting.")
+            self.cleanup_resources()
+            raise
         except Exception as e:
             logger.error(f"Error searching and selecting manga: {e}")
             raise
-        except KeyboardInterrupt as e:
-            # Clean up the resources used by the program
-            self.web_interactions.cleanup()            
-            raise
+
+    def prompt_manga_name(self):
+        """
+        Prompts the user to enter the name of the manga.
+
+        Returns:
+            str: The name of the manga entered by the user.
+        """
+        return input("Enter the name of the manga: ")
+
+    def fetch_and_process_manga_cards(self, manga_name):
+        """
+        Fetches and processes manga cards based on the provided manga name.
+
+        Args:
+            manga_name (str): The name of the manga to search for.
+
+        Returns:
+            list: A list of manga objects.
+        """
+        return fetch_and_process_manga_cards(self.web_interactions.driver, manga_name)
+
+    def display_search_results(self, mangas):
+        """
+        Displays the search results.
+
+        Args:
+            mangas (list): A list of manga objects.
+        """
+        print("Search results:")
+        for i, manga in enumerate(mangas):
+            print(f"{i + 1}. {manga['title']}")
+
+    def prompt_manga_selection(self, num_mangas):
+        """
+        Prompts the user to select a manga from the search results.
+
+        Args:
+            num_mangas (int): The number of manga options available.
+
+        Returns:
+            int: The index of the selected manga.
+        """
+        while True:
+            try:
+                selected_index = int(input("Enter the number of the manga you want to download (or '0' to exit): "))
+                if 0 <= selected_index <= num_mangas:
+                    return selected_index
+                else:
+                    print("Invalid number. Please enter a valid number.")
+            except ValueError:
+                print("Invalid input. Please enter a number.")
+
+    def cleanup_resources(self):
+        """
+        Cleans up resources used by the program.
+        """
+        #self.web_interactions.cleanup()
+        pass

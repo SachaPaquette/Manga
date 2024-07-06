@@ -33,7 +33,7 @@ def main():
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
     finally:
-        web_interactions.cleanup()
+        #web_interactions.cleanup()
         exit()
 if __name__ == "__main__":
     main() # Run the main function
