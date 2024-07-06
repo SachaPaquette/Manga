@@ -6,14 +6,8 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException, StaleElementReferenceException, WebDriverException, TimeoutException,  NoSuchWindowException, InvalidSessionIdException
-from dotenv import load_dotenv
 import time
-import requests
 from Config.config import Config
-import re
-import json
-import base64
-import hashlib
 from Config.logs_config import setup_logging
 from Driver.driver_config import driver_setup
 logger = setup_logging('manga_download', Config.MANGA_DOWNLOAD_LOG_PATH)
@@ -89,7 +83,7 @@ class WebInteractions:
                 return False
 
         except NoSuchElementException:
-            logger.error("Next page button not found.")
+            # Next page button not found (last page reached)
             return False
 
         except ElementClickInterceptedException as e:

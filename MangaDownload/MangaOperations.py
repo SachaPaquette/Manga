@@ -18,7 +18,6 @@ from MangaDownload.FileOperations import FileOperations
 from MangaDownload.WebInteractions import WebInteractions
 from MangaDownload.WebInteractions import logger
 from MangaFetch.FetchOperations import fetch_and_process_manga_cards
-from selenium.webdriver.support.ui import WebDriverWait
 
 class MangaDownloader:
    
@@ -127,18 +126,19 @@ class MangaDownloader:
             try:
                 # Extract the chapter info from the chapter card
                 chapter_info = self.extract_chapter_info(chapter)
-
-                # Check if the chapter number has already been added
-                if chapter_info and chapter_info["chapter_name"] != self.previous_chapter_name:
-                    chapters_array.append(chapter_info)
-                    self.previous_chapter_name = chapter_info["chapter_name"]
-                    print(f"Added chapter: {chapter_info['chapter_number']}, {chapter_info['chapter_name']}")
+                if chapter_info:
+                    # Check if the chapter number has already been added
+                    if chapter_info["chapter_name"] != self.previous_chapter_name:
+                        chapters_array.append(chapter_info)
+                        self.previous_chapter_name = chapter_info["chapter_name"]
             except NoSuchElementException as e:
                 logger.error(f"Error while fetching chapter: {e}")
             except Exception as e:
                 logger.error(f"Error processing chapter cards: {e}")
                 continue
+
         return chapters_array
+
 
 
 
@@ -204,7 +204,7 @@ class MangaDownloader:
             """
 
             chapter_link_elements, link = self.find_chapter_link(chapter)
-            if  chapter_link_elements is None:
+            if  chapter_link_elements is None or link is None:
                 return None
             # split the text into a list of strings and get the first element
             chapter_name = chapter_link_elements.text.split('\n')[0]
@@ -216,25 +216,8 @@ class MangaDownloader:
             }    
             return chapter_info if chapter_info else None
 
-
-    def create_folder(self, series_name, chapter_number):
-        try:
-            # Sanitize the folder name (remove characters not allowed in a folder name)
-            sanitized_folder_name = self.file_operations.sanitize_folder_name(
-                series_name)
-            save_path = os.path.join(
-                self.save_path, sanitized_folder_name, str(chapter_number))
-            return save_path
-        except Exception as e:
-            logger.error(f"Error creating folder: {e}")
-            raise
         
-    def check_if_file_exists(self, save_path, chapter_number):
-        # Check if the folder for the chapter already exists, if so, exit
-        if os.path.exists(save_path):
-            logger.warning(
-                f"Folder for {chapter_number} already exists. Exiting.")
-            
+
     def download_images_from_chapter(self, chapter_link, series_name, chapter_number):
         try:
             if os.path.exists(self.prepare_save_path(series_name, "Chapter " + str(chapter_number))):
