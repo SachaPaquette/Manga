@@ -263,7 +263,7 @@ class WebInteractions:
             logger.error(f"Error while checking if element exists: {e}")
             
 
-    def naviguate(self, url, wait_conddition=None):
+    def naviguate(self, url, wait_condition=None):
             """
             Navigates to the specified URL using the Selenium WebDriver instance associated with this object.
 
@@ -275,8 +275,8 @@ class WebInteractions:
             """
             try:
                 self.driver.get(url)
-                if wait_conddition:
-                    self.wait_until_page_loaded(wait_conddition)   
+                if wait_condition:
+                    self.wait_until_page_loaded(wait_condition)   
             except Exception as e:
                 logger.error(f"Error while navigating to {url}: {e}")
                 

@@ -59,52 +59,90 @@ class MangaDownloader:
         :param link: The link to the manga.
         :type link: str
         :return: A list of chapter objects.
-        :return type: list
+        :rtype: list
         """
-        print("Fetching chapters...")
-        self.web_interactions.naviguate(link, wait_conddition=1)
+        # Navigate to the manga link
+        self.web_interactions.naviguate(link, wait_condition=1)
+        chapters_array = []
+
         try:
-            print("Fetching chapters...")
             self.web_interactions.wait_for_chapter_cards()
-            print("Chapter cards found.")
-            # Check if there are chapters on the page
-            chapter_cards = self.web_interactions.driver.find_elements(
-                by=By.CLASS_NAME, value=Config.CHAPTER_CARDS)
-            
-            # Loop while there are still chapters to fetch
-            print("Processing chapters...")
-            chapters_array = self.process_chapter_cards(chapter_cards)
-            print(f"Found {len(chapters_array)} chapters.")
-            while True:  
-                
-                if not self.web_interactions.click_next_page():  # Check the return value
-                    break
+            chapters_array = self.collect_chapters()
 
-                self.web_interactions.wait_until(condition=(By.CLASS_NAME, Config.CHAPTER_CARDS), timeout=10, multiple=True)
-                chapter_cards = self.web_interactions.driver.find_elements(
-                    by=By.CLASS_NAME, value=Config.CHAPTER_CARDS)  # Find all the chapter cards on the page
-                # Process the chapter cards and append the results to the array
-                chapters_array += self.process_chapter_cards(chapter_cards)
-
-            print(f"Found {len(chapters_array)} chapters.")
-            print(chapters_array)        
-        
-            # Add the chapter numbers when the chapter_number is none
-            for i, chapter in enumerate(chapters_array):
-                if chapter['chapter_number'] is None:
-                    if i > 0 and chapters_array[i - 1]['chapter_number'] is not None:
-                        chapter['chapter_number'] = chapters_array[i - 1]['chapter_number'] - 1
-                    elif i < len(chapters_array) - 1 and chapters_array[i + 1]['chapter_number'] is not None:
-                        chapter['chapter_number'] = chapters_array[i + 1]['chapter_number'] + 1
-                    else:
-                        chapter['chapter_number'] = len(chapters_array) - i
+            self.fill_missing_chapter_numbers(chapters_array)
         except Exception as e:
             logger.error(f"Error fetching chapters: {e}")
             raise
-        finally:
-            # Check if there are chapters to return
-            if chapters_array:
-                return chapters_array
+
+        return chapters_array if chapters_array else []
+
+    def collect_chapters(self):
+        """
+        Collects chapters from the current and subsequent pages.
+
+        :return: A list of chapter objects.
+        :rtype: list
+        """
+        chapters_array = []
+
+        while True:
+            chapter_cards = self.web_interactions.driver.find_elements(By.CLASS_NAME, Config.CHAPTER_CARDS)
+            chapters_array += self.process_chapter_cards(chapter_cards)
+
+            if not self.web_interactions.click_next_page():
+                break
+
+            self.web_interactions.wait_until_page_loaded(1)
+
+        return chapters_array
+
+    def process_chapter_cards(self, chapter_cards):
+        """
+        Processes the chapter cards and extracts chapter information.
+
+        :param chapter_cards: List of chapter card elements.
+        :type chapter_cards: list
+        :return: A list of chapter objects.
+        :rtype: list
+        """
+        chapters = []
+        for card in chapter_cards:
+            # Extract chapter details from the card
+            chapter = self.extract_chapter_info(card)
+            chapters.append(chapter)
+        return chapters
+
+    def extract_chapter_info(self, card):
+        """
+        Extracts chapter information from a chapter card element.
+
+        :param card: The chapter card element.
+        :type card: WebElement
+        :return: A dictionary with chapter information.
+        :rtype: dict
+        """
+        # Placeholder for extracting chapter information
+        # Implement the actual extraction logic based on the structure of chapter card elements
+        return {
+            'chapter_number': None,  # Replace with actual extraction logic
+            # Add other fields as necessary
+        }
+
+    def fill_missing_chapter_numbers(self, chapters_array):
+        """
+        Fills missing chapter numbers in the chapters array.
+
+        :param chapters_array: List of chapter objects.
+        :type chapters_array: list
+        """
+        for i, chapter in enumerate(chapters_array):
+            if chapter['chapter_number'] is None:
+                if i > 0 and chapters_array[i - 1]['chapter_number'] is not None:
+                    chapter['chapter_number'] = chapters_array[i - 1]['chapter_number'] - 1
+                elif i < len(chapters_array) - 1 and chapters_array[i + 1]['chapter_number'] is not None:
+                    chapter['chapter_number'] = chapters_array[i + 1]['chapter_number'] + 1
+                else:
+                    chapter['chapter_number'] = len(chapters_array) - i
 
 
     def process_chapter_cards(self, chapter_cards):
@@ -314,7 +352,7 @@ class MangaDownloader:
         Args:
             chapter_link (str): The URL of the chapter to navigate to.
         """
-        self.web_interactions.naviguate(chapter_link, wait_conddition=1)
+        self.web_interactions.naviguate(chapter_link, wait_condition=1)
         
         # Inject the network monitoring JavaScript
         self.inject_network_monitoring_js()
