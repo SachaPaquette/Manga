@@ -341,7 +341,9 @@ class MangaDownloader:
                 logger.error(f"Failed to capture any pages for chapter {chapter_number} of {series_name}.")
                 return
 
-            self.save_chapter_pages(series_name, chapter_number, pages)
+            self.file_operations.save_chapter_pages(series_name, chapter_number, pages)
+            
+            #self.save_chapter_pages(series_name, chapter_number, pages)
         except Exception as e:
             logger.error(f"Error processing chapter: {e}")
             raise
@@ -515,3 +517,13 @@ class MangaDownloader:
         """
         #self.web_interactions.cleanup()
         pass
+    
+    def download_all_chapters(self, chapters, series_name):
+        """
+        Downloads all chapters of a manga.
+
+        Args:
+            chapters (list): A list of chapter objects.
+            series_name (str): The name of the manga series.
+        """
+        

@@ -47,6 +47,13 @@ class FileOperations:
         self.unique_base64_data = set()
         # Store the last loaded image source (to check if the image is loaded)
         self.last_loaded_img_src = None
+        
+        if os.getenv("SAVE_PATH") is not None:
+            self.save_path = os.getenv("SAVE_PATH")
+        else:
+            print("SAVE_PATH environment variable not found.")
+            self.save_path = Config.DEFAULT_SAVE_PATH
+            print(f"Using default save path to save mangas: {self.save_path}")
 
     def sanitize_folder_name(self, folder_name):
         """
@@ -146,6 +153,47 @@ class FileOperations:
             logger.error(f"Error saving PNG link {img_src} for chapter {chapter_number}, page {page_number}: {e}")
             return page_number  # Return the current page number if there's an error
 
+    def bulk_save_png_links(self, save_path, page_data):
+        """
+        Save multiple PNG images from URLs to the specified folder path in bulk.
+
+        Args:
+            save_path (str): The path to save the manga.
+            page_data (list): A list of tuples containing series name, chapter number, page number, and image URL.
+
+        Returns:
+            None
+        """
+        for series_name, chapter_number, page_number, img_src in page_data:
+            try:
+                folder_path, _ = self.create_chapter_folder(save_path, series_name, chapter_number, page_number)
+                self.save_image_from_url(img_src, folder_path, self.create_screenshot_filename(page_number))
+            except Exception as e:
+                logger.error(f"Error saving PNG link {img_src} for chapter {chapter_number}, page {page_number}: {e}")
+
+
+    def save_chapter_pages(self, series_name, chapter_number, pages):
+        """
+        Save the captured PNG links for the chapter.
+
+        Args:
+            series_name (str): The name of the manga series.
+            chapter_number (int): The number of the chapter.
+            pages (list): A list of tuples containing page numbers and URLs.
+
+        Returns:
+            None
+        """
+        page_data = []
+
+        for page_number, page_url in pages:
+            print(f"Queuing page {page_number} for chapter {chapter_number}...")
+            print(page_url)
+            page_data.append((series_name, chapter_number, page_number, page_url ))
+
+        self.bulk_save_png_links(self.save_path, page_data)
+        
+        
     def save_image_from_url(self, img_src, folder_path, file_name):
         """
         Downloads an image from the given URL and saves it to the specified folder with the given file name.
