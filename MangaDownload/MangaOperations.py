@@ -95,19 +95,24 @@ class MangaDownloader:
   
     def fill_missing_chapter_numbers(self, chapters_array):
         """
-        Fills missing chapter numbers in the chapters array.
+        Fills missing chapter numbers in the chapters array in descending order.
 
         :param chapters_array: List of chapter objects.
         :type chapters_array: list
         """
-        for i, chapter in enumerate(chapters_array):
-            if 'chapter_number' not in chapter or chapter['chapter_number'] is None:
-                if i > 0 and 'chapter_number' in chapters_array[i - 1] and chapters_array[i - 1]['chapter_number'] is not None:
-                    chapter['chapter_number'] = chapters_array[i - 1]['chapter_number'] - 1
-                elif i < len(chapters_array) - 1 and 'chapter_number' in chapters_array[i + 1] and chapters_array[i + 1]['chapter_number'] is not None:
-                    chapter['chapter_number'] = chapters_array[i + 1]['chapter_number'] + 1
+        last_chapter_number = None
+
+        for i in range(len(chapters_array) - 1, -1, -1):
+            chapter = chapters_array[i]
+            if 'chapter_number' in chapter and chapter['chapter_number'] is not None:
+                last_chapter_number = chapter['chapter_number']
+            else:
+                if last_chapter_number is not None:
+                    chapter['chapter_number'] = last_chapter_number + 1
                 else:
                     chapter['chapter_number'] = len(chapters_array) - i
+                last_chapter_number = chapter['chapter_number']
+
 
     def process_chapter_cards(self, chapter_cards):
         """
