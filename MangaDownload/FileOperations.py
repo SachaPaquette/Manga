@@ -24,7 +24,7 @@ from PIL import Image
 import io
 import urllib.request
 
-
+import concurrent.futures
 class FileOperations:
     failed_images = []  # Array to store the images that failed to save
 
@@ -164,13 +164,16 @@ class FileOperations:
         Returns:
             None
         """
-        for series_name, chapter_number, page_number, img_src in page_data:
+        def process_image(data):
+            series_name, chapter_number, page_number, img_src = data
             try:
                 folder_path, _ = self.create_chapter_folder(save_path, series_name, chapter_number, page_number)
                 self.save_image_from_url(img_src, folder_path, self.create_screenshot_filename(page_number))
             except Exception as e:
                 logger.error(f"Error saving PNG link {img_src} for chapter {chapter_number}, page {page_number}: {e}")
 
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            executor.map(process_image, page_data)
 
     def save_chapter_pages(self, series_name, chapter_number, pages):
         """
