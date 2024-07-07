@@ -1,17 +1,13 @@
-import os
-from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException, StaleElementReferenceException, WebDriverException, TimeoutException,  NoSuchWindowException, InvalidSessionIdException
-import time
+from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException, TimeoutException
 from Config.config import Config
 from Config.logs_config import setup_logging
 from Driver.driver_config import driver_setup
 logger = setup_logging('manga_download', Config.MANGA_DOWNLOAD_LOG_PATH)
-
 from enum import Enum
 
 class WaitCondition(Enum):

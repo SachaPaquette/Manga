@@ -1,30 +1,9 @@
-import os
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException, StaleElementReferenceException, WebDriverException, TimeoutException,  NoSuchWindowException, InvalidSessionIdException
-from dotenv import load_dotenv
-import time
-import requests
-import re
-import json
+import os, requests, re, io, concurrent.futures
 from Config.config import Config
-import base64
-import hashlib
-from Config.logs_config import setup_logging
-from MangaDownload.WebInteractions import WebInteractions
 # Configure logging
 from MangaDownload.WebInteractions import logger
-from Driver.driver_config import driver_setup
-import random
 from PIL import Image
-import io
-import urllib.request
 
-import concurrent.futures
 class FileOperations:
     failed_images = []  # Array to store the images that failed to save
 

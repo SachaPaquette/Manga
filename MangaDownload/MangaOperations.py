@@ -1,19 +1,7 @@
-import json
-import os
-import re
-
-from bs4 import BeautifulSoup
-from selenium import webdriver
+import json,time, os, re
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.common.action_chains import ActionChains
-
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import  NoSuchElementException, TimeoutException
-from dotenv import load_dotenv
-import time, datetime 
 from Config.config import Config
-from Config.logs_config import setup_logging
 from MangaDownload.FileOperations import FileOperations
 from MangaDownload.WebInteractions import WebInteractions
 from MangaDownload.WebInteractions import logger

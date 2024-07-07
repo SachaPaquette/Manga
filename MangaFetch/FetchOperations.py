@@ -1,15 +1,8 @@
-import re
-import time
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.support.ui import WebDriverWait
-from tqdm import tqdm  # Import tqdm for the progress bar
-import random
 from Config.config import Config
 from Config.logs_config import setup_logging
-from Driver.driver_config import driver_setup
-logger = setup_logging('manga_fetch', Config.MANGA_FETCH_LOG_PATH)
-
+logger = setup_logging('manga_fetch', Config.MANGA_DOWNLOAD_LOG_PATH)
 
 def format_manga_url(manga_name):
     """
