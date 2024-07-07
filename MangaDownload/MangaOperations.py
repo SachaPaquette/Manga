@@ -222,17 +222,15 @@ class MangaDownloader:
             
             return chapter_info if chapter_info else None
 
-        
 
     def download_images_from_chapter(self, chapter_link, series_name, chapter_number):
         try:
-            if os.path.exists(self.prepare_save_path(series_name, "Chapter " + str(chapter_number))):
-                logger.warning(f"Folder for {chapter_number} already exists. Skipping.")
+            if self.file_operations.check_chapter_folder_exist(series_name, chapter_number):
+                logger.info(f"Chapter {chapter_number} already downloaded. Skipping...")
                 return
-
+            # Navigate to the chapter link and process the chapter
             self.navigate_to_chapter(chapter_link)
             self.process_chapter(series_name, chapter_number)
-
         except NoSuchElementException as e:
             logger.error(f"Element not found: {e}")
         except TimeoutException as e:
@@ -242,8 +240,6 @@ class MangaDownloader:
         finally:
             pass
 
-    def prepare_save_path(self, series_name, chapter_number):
-        return os.path.join(self.save_path, self.file_operations.sanitize_folder_name(series_name), str(chapter_number))
 
 
     def navigate_to_chapter(self, chapter_link):
@@ -253,12 +249,12 @@ class MangaDownloader:
         Args:
             chapter_link (str): The URL of the chapter to navigate to.
         """
+        # Navigate to the chapter link
         self.web_interactions.naviguate(chapter_link)
-        
-        # Inject the network monitoring JavaScript
+        # Inject the network monitoring JavaScript to wait until all network requests are completed
         self.inject_network_monitoring_js()
-        
-        # Retry up to 3 times
+    
+        # Retry up to 3 times if the page does not load
         for _ in range(3):
             try:
                 self.web_interactions.wait_until_element_loaded('class_name', 'overflow-x-auto.flex.items-center.h-full')
@@ -365,15 +361,19 @@ class MangaDownloader:
         """
         pages = []
         for attempt in range(max_attempts):
-            print(f"Attempt {attempt + 1} to capture network logs...")
-            pages = self.capture_network_logs(re.compile(r"^https://.*mangadex\.network/data/.*\.(png|jpg)$"))
-            if pages and pages[0][0] == 1:
-                break
-            else:
-                print("Failed to capture all pages, retrying...")
-                time.sleep(1)
+            if attempt + 1 > 1:
+                print(f"Attempt {attempt + 1} to capture network logs...")
+            try:     
+                pages = self.capture_network_logs(re.compile(r"^https://.*mangadex\.network/data/.*\.(png|jpg)$"))
+                if pages and pages[0][0] == 1:
+                    break
+                else:
+                    print("Failed to capture all pages, retrying...")
+                    time.sleep(1)
+                return pages
+            except Exception as e:
+                logger.error(f"Error retrying to capture network logs: {e}")       
         return pages
-
     def capture_network_logs(self, png_pattern):
         """
         Capture network logs and filter PNG URLs.
@@ -384,26 +384,69 @@ class MangaDownloader:
         Returns:
             list: A list of tuples containing page numbers and URLs.
         """
-        pages = []
         try:
-            for log in self.web_interactions.driver.get_log('performance'):
-                message = json.loads(log['message'])['message']
-                response = message.get('params', {}).get('response', {})
-                url = response.get('url')
-                if url and png_pattern.match(url):
-                    # Extract the page number part of the URL and validate if it's numeric
-                    page_number_str = url.split('/')[-1].split('-')[0]
-                    # Using regular expression to extract numeric part if present
-                    match = re.search(r'\d+', page_number_str)
-                    if match:
-                        page_number = int(match.group())
-                        pages.append((page_number, url))
-                    else:
-                        logger.warning(f"Invalid page number in URL: {url}")
-            return sorted(pages, key=lambda x: x[0])
+            return sorted(self.extract_png_urls(self.web_interactions.driver.get_log('performance'), png_pattern), key=lambda x: x[0])
         except Exception as e:
             logger.error(f"Error capturing network logs: {e}")
-            return pages
+            return []
+        
+        
+    def extract_png_urls(self, logs, png_pattern):
+        """
+        Extract PNG URLs and their corresponding page numbers from network logs.
+
+        Args:
+            logs (list): List of log entries from the browser.
+            png_pattern (re.Pattern): Compiled regex pattern to match PNG URLs.
+
+        Returns:
+            list: A list of tuples containing page numbers and URLs.
+        """
+        pages = []
+        for log in logs:
+            url = self.extract_url_from_log(log)
+            if url and png_pattern.match(url):
+                page_number = self.extract_page_number(url)
+                if page_number is not None:
+                    pages.append((page_number, url))
+                else:
+                    logger.warning(f"Invalid page number in URL: {url}")
+        return pages
+
+    def extract_url_from_log(self, log):
+        """
+        Extract the URL from a log entry.
+
+        Args:
+            log (dict): A single log entry.
+
+        Returns:
+            str or None: The extracted URL or None if extraction fails.
+        """
+        try:
+            return json.loads(log['message']).get('message', {}).get('params', {}).get('response', {}).get('url')
+        except Exception as e:
+            logger.error(f"Error extracting URL from log: {e}")
+            return None
+
+    def extract_page_number(self, url):
+        """
+        Extracts the page number from the given URL.
+
+        Args:
+            url (str): The URL to extract the page number from.
+
+        Returns:
+            int or None: The page number if found, otherwise None.
+        """
+        try:
+            # Extract the page number from the URL
+            match = re.search(r'\d+', url.split('/')[-1].split('-')[0])
+            if match:
+                return int(match.group())
+        except Exception as e:
+            logger.error(f"Error extracting page number from URL {url}: {e}")
+        return None
         
     def save_chapter_pages(self, series_name, chapter_number, pages):
         """
@@ -420,32 +463,11 @@ class MangaDownloader:
         for page_number, page_url in pages:
             print(f"Saving page {page_number} for chapter {chapter_number}...")
             self.file_operations.save_png_links(self.save_path, series_name, chapter_number, page_number, page_url)
-
-
-    def handle_error(self):
-            """
-            Handles errors that occur during manga download.
-
-            If the number of consecutive errors exceeds a certain threshold, the method raises a StopIteration exception.
-
-            Returns:
-                True if the error was handled successfully.
-            """
-            error_count = 0  # Initialize error count
-            max_error_count = 3  # Set a maximum number of consecutive errors allowed
-
-            error_count += 1  # Increment error count
-            if error_count >= max_error_count:
-                print(f"Exceeded maximum consecutive errors ({max_error_count}). Exiting.")
-                raise StopIteration
-            return True
-
         
     def search_and_select_manga(self):
         try:
-            # Ask the user to enter the name of the manga
-            manga_name = self.prompt_manga_name()
-            mangas = self.fetch_and_process_manga_cards(manga_name)
+            # Ask the user to enter the name of the manga and fetch the manga cards
+            mangas = self.fetch_and_process_manga_cards(self.prompt_manga_name())
             
             if not mangas:
                 print("No manga found. Please try again.\n")
@@ -516,13 +538,15 @@ class MangaDownloader:
         """
         while True:
             try:
-                selected_index = int(input("Enter the number of the manga you want to download (or '0' to exit): "))
-                if 0 <= selected_index <= num_mangas:
-                    return selected_index
-                else:
-                    print("Invalid number. Please enter a valid number.")
+                selected_index = input("Enter the number of the manga you want to download (or '0' to exit): ")
+                if selected_index.isdigit():
+                    selected_index = int(selected_index)
+                    if 0 <= selected_index <= num_mangas:
+                        return selected_index
+                print(f"Invalid number. Please enter a number between 0 and {num_mangas}.")
             except ValueError:
-                print("Invalid input. Please enter a number.")
+                print("Invalid input. Please enter a valid number.")
+
 
     def cleanup_resources(self):
         """

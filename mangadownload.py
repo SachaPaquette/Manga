@@ -11,10 +11,11 @@ def instantiate_classes():
     Instantiate WebInteractions, FileOperations, and MangaDownloader objects.
 
     Returns:
-    web_interactions (WebInteractions): An instance of the WebInteractions class.
-    manga_downloader (MangaDownloader): An instance of the MangaDownloader class.
+        tuple: Instances of WebInteractions and MangaDownloader.
     """
-    return WebInteractions(), MangaDownloader(WebInteractions(), FileOperations(WebInteractions()))
+    web_interactions = WebInteractions()
+    file_operations = FileOperations(web_interactions)
+    return MangaDownloader(web_interactions, file_operations)
 
 def main():
     """
@@ -22,12 +23,12 @@ def main():
     and cleans up the resources used by the program.
     """
     try:
-        web_interactions, manga_downloader = instantiate_classes() # Instantiate WebInteractions, FileOperations, and MangaDownloader objects
-        chapters, series_name = manga_downloader.search_and_select_manga()
+        manga_downloader = instantiate_classes() # Instantiate MangaDownloader object
+        chapters, series_name = manga_downloader.search_and_select_manga() # Search and select a manga from the user's input
         if chapters and series_name:
             for chapter in chapters:
-                manga_downloader.print_chapter_info(chapter) # Print the chapter number and name
-                manga_downloader.download_images_from_chapter(chapter['chapter_link'], series_name, chapter['chapter_number'])   
+                manga_downloader.print_chapter_info(chapter) # Print the chapter's index and name
+                manga_downloader.download_images_from_chapter(chapter['chapter_link'], series_name, chapter['chapter_number']) # Download images from the chapter
     except KeyboardInterrupt as e:
         exit(0)
     except Exception as e:

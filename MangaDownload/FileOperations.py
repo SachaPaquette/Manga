@@ -164,6 +164,7 @@ class FileOperations:
         Returns:
             None
         """
+        
         def process_image(data):
             series_name, chapter_number, page_number, img_src = data
             try:
@@ -172,9 +173,11 @@ class FileOperations:
             except Exception as e:
                 logger.error(f"Error saving PNG link {img_src} for chapter {chapter_number}, page {page_number}: {e}")
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
+        # Use ThreadPoolExecutor to parallelize the image saving process
+        with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
             executor.map(process_image, page_data)
 
+            
     def save_chapter_pages(self, series_name, chapter_number, pages):
         """
         Save the captured PNG links for the chapter.
@@ -187,13 +190,16 @@ class FileOperations:
         Returns:
             None
         """
-        page_data = []
+        try:
+            
+            page_data = []
 
-        for page_number, page_url in pages:
-            page_data.append((series_name, chapter_number, page_number, page_url ))
-        print(f"Saving {len(page_data)} pages for chapter {chapter_number}...")
-        self.bulk_save_png_links(self.save_path, page_data)
-        
+            for page_number, page_url in pages:
+                page_data.append((series_name, chapter_number, page_number, page_url ))
+            print(f"Saving {len(page_data)} pages for chapter {chapter_number}...")
+            self.bulk_save_png_links(self.save_path, page_data)
+        except Exception as e:
+            logger.error(f"Error saving chapter pages for chapter {chapter_number}: {e}")
         
     def save_image_from_url(self, img_src, folder_path, file_name):
         """
@@ -219,3 +225,17 @@ class FileOperations:
         except IOError as e:
             logger.error(f"Error saving image to {os.path.join(folder_path, file_name)}: {e}")
             return False
+
+
+    def prepare_save_path(self, series_name, chapter_number):
+        return os.path.join(self.save_path, self.sanitize_folder_name(series_name), str(chapter_number))
+    
+    def check_chapter_folder_exist(self, series_name, chapter_number):
+        """
+        Check if the folder for the current chapter already exists.
+
+        Returns:
+            bool: True if the folder exists, False otherwise.
+        """
+        return os.path.exists(self.prepare_save_path(series_name, "Chapter " + str(chapter_number)))
+
