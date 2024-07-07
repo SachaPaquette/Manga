@@ -123,7 +123,7 @@ class MangaDownloader:
             chapter_cards (list): A list of chapter cards to extract information from.
 
         Returns:
-            tuple: A tuple containing the array of chapter info objects and the number of the first chapter.
+            list: A list of chapter info objects.
         """
         chapters_array = []
 
@@ -131,17 +131,22 @@ class MangaDownloader:
             try:
                 # Extract the chapter info from the chapter card
                 chapter_info = self.extract_chapter_info(chapter)
-                if chapter_info:
-                    # Check if the chapter number has already been added
-                    if chapter_info["chapter_name"] != self.previous_chapter_name:
-                        chapters_array.append(chapter_info)
-                        self.previous_chapter_name = chapter_info["chapter_name"]
+                if chapter_info is None:
+                    logger.warning(f"Chapter info extraction returned None for chapter: {chapter}")
+                    continue
+
+                # Check if the chapter number has already been added
+                if chapter_info["chapter_name"] != self.previous_chapter_name:
+                    chapters_array.append(chapter_info)
+                    self.previous_chapter_name = chapter_info["chapter_name"]
+
             except NoSuchElementException as e:
                 logger.error(f"Error while fetching chapter: {e}")
             except Exception as e:
                 logger.error(f"Error processing chapter cards: {e}")
                 continue
         return chapters_array
+
 
     def unsupported_website(self, link):
         """
@@ -214,6 +219,7 @@ class MangaDownloader:
                 'chapter_name': chapter_name,
                 'chapter_link': link
             }    
+            
             return chapter_info if chapter_info else None
 
         
@@ -340,7 +346,6 @@ class MangaDownloader:
             if not pages:
                 logger.error(f"Failed to capture any pages for chapter {chapter_number} of {series_name}.")
                 return
-
             self.file_operations.save_chapter_pages(series_name, chapter_number, pages)
             
             #self.save_chapter_pages(series_name, chapter_number, pages)
@@ -361,9 +366,7 @@ class MangaDownloader:
         pages = []
         for attempt in range(max_attempts):
             print(f"Attempt {attempt + 1} to capture network logs...")
-            regex = re.compile(r"^https://.*mangadex\.network/data/.*\.(png|jpg)$")
-
-            pages = self.capture_network_logs(regex)
+            pages = self.capture_network_logs(re.compile(r"^https://.*mangadex\.network/data/.*\.(png|jpg)$"))
             if pages and pages[0][0] == 1:
                 break
             else:
@@ -382,15 +385,26 @@ class MangaDownloader:
             list: A list of tuples containing page numbers and URLs.
         """
         pages = []
-        for log in self.web_interactions.driver.get_log('performance'):
-            message = json.loads(log['message'])['message']
-            response = message.get('params', {}).get('response', {})
-            url = response.get('url')
-            if url and png_pattern.match(url):
-                page_number = int(url.split('/')[-1].split('-')[0])
-                pages.append((page_number, url))
-        return sorted(pages, key=lambda x: x[0])
-
+        try:
+            for log in self.web_interactions.driver.get_log('performance'):
+                message = json.loads(log['message'])['message']
+                response = message.get('params', {}).get('response', {})
+                url = response.get('url')
+                if url and png_pattern.match(url):
+                    # Extract the page number part of the URL and validate if it's numeric
+                    page_number_str = url.split('/')[-1].split('-')[0]
+                    # Using regular expression to extract numeric part if present
+                    match = re.search(r'\d+', page_number_str)
+                    if match:
+                        page_number = int(match.group())
+                        pages.append((page_number, url))
+                    else:
+                        logger.warning(f"Invalid page number in URL: {url}")
+            return sorted(pages, key=lambda x: x[0])
+        except Exception as e:
+            logger.error(f"Error capturing network logs: {e}")
+            return pages
+        
     def save_chapter_pages(self, series_name, chapter_number, pages):
         """
         Save the captured PNG links for the chapter.
@@ -405,7 +419,6 @@ class MangaDownloader:
         """
         for page_number, page_url in pages:
             print(f"Saving page {page_number} for chapter {chapter_number}...")
-            print(page_url)
             self.file_operations.save_png_links(self.save_path, series_name, chapter_number, page_number, page_url)
 
 
@@ -452,7 +465,7 @@ class MangaDownloader:
             return all_chapters, selected_manga['title']
         
         except KeyboardInterrupt:
-            print("Exiting.")
+            print("\nExiting.")
             self.cleanup_resources()
             raise
         except Exception as e:
@@ -517,13 +530,3 @@ class MangaDownloader:
         """
         #self.web_interactions.cleanup()
         pass
-    
-    def download_all_chapters(self, chapters, series_name):
-        """
-        Downloads all chapters of a manga.
-
-        Args:
-            chapters (list): A list of chapter objects.
-            series_name (str): The name of the manga series.
-        """
-        

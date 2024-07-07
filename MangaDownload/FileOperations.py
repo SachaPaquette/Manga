@@ -190,10 +190,8 @@ class FileOperations:
         page_data = []
 
         for page_number, page_url in pages:
-            print(f"Queuing page {page_number} for chapter {chapter_number}...")
-            print(page_url)
             page_data.append((series_name, chapter_number, page_number, page_url ))
-
+        print(f"Saving {len(page_data)} pages for chapter {chapter_number}...")
         self.bulk_save_png_links(self.save_path, page_data)
         
         
