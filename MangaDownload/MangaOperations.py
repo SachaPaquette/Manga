@@ -141,26 +141,19 @@ class MangaDownloader:
             except Exception as e:
                 logger.error(f"Error processing chapter cards: {e}")
                 continue
-
         return chapters_array
 
-
-
-
     def unsupported_website(self, link):
-            """
-            Checks if the given link is from the mangaplus website, which is not supported due to its different layout.
+        """
+        Checks if the given link is from the mangaplus website, which is not supported due to its different layout.
 
-            Args:
-                link (str): The link to check.
+        Args:
+            link (str): The link to check.
 
-            Returns:
-                str or None: The original link if it is not from mangaplus, or None if it is.
-            """
-            if "mangaplus" in link:
-                return None
-            else:
-                return link
+        Returns:
+            bool: True if the link is unsupported (from mangaplus), False otherwise.
+        """
+        return "mangaplus" in link
 
 
     def find_chapter_link(self, chapter):
@@ -171,7 +164,7 @@ class MangaDownloader:
             chapter: The chapter element to search for links and flag images.
 
         Returns:
-            A tuple (link element, link URL) corresponding to the English title, or None if not found.
+            tuple: A tuple (link element, link URL) corresponding to the English title, or None if not found.
         """
         try:
             # Find all chapter link elements within the chapter
@@ -182,17 +175,19 @@ class MangaDownloader:
                     # Check if the link has an image element with title attribute 'English'
                     img_element = link.find_element(by=By.TAG_NAME, value=Config.IMG)
                     if img_element.get_attribute('title') == 'English':
-                        links = link.find_element(by=By.TAG_NAME, value=Config.HYPERLINK).get_attribute(Config.HREF)
-                        if links and self.unsupported_website(links):
-                            return link, links
+                        link_url = link.find_element(by=By.TAG_NAME, value=Config.HYPERLINK).get_attribute(Config.HREF)
+                        if link_url and not self.unsupported_website(link_url):
+                            return link, link_url
                 except NoSuchElementException:
                     continue
-            
-            return None
-        
+
+        except NoSuchElementException as e:
+            logger.error(f"No such element found: {e}")
         except Exception as e:
             logger.error(f"Error finding chapter link: {e}")
-            return None
+
+        return None
+
 
 
 
