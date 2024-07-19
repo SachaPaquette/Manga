@@ -11,67 +11,30 @@ def instantiate_classes():
     Instantiate WebInteractions, FileOperations, and MangaDownloader objects.
 
     Returns:
-    web_interactions (WebInteractions): An instance of the WebInteractions class.
-    file_operations (FileOperations): An instance of the FileOperations class.
-    manga_downloader (MangaDownloader): An instance of the MangaDownloader class.
+        tuple: Instances of WebInteractions and MangaDownloader.
     """
     web_interactions = WebInteractions()
-    file_operations = FileOperations(web_interactions, web_interactions.driver)
-    manga_downloader = MangaDownloader(web_interactions, file_operations)
-    return web_interactions, file_operations, manga_downloader
-def get_manga_chapters_and_name(manga_downloader):
-    """
-    Search and select a manga.
-    """
-    return manga_downloader.search_and_select_manga()
+    file_operations = FileOperations(web_interactions)
+    return MangaDownloader(web_interactions, file_operations)
 
-def download_chapter_images(manga_downloader, chapter, series_name):
-    """
-    Download the images from the chapter.
-    """
-    manga_downloader.download_images_from_chapter(
-        chapter['chapter_link'], series_name, chapter['chapter_number']
-    )
-    
-def print_chapter_info(chapter):
-    """
-    Print the chapter number and name.
-    """
-    print(f"{chapter['chapter_number']}, {chapter['chapter_name']}, {chapter['chapter_link']}")
-
-def cleanup_resources(web_interactions):
-    """
-    Clean up the resources used by the program.
-
-    Args:
-    web_interactions (WebInteractions): An instance of the WebInteractions class.
-    """
-    web_interactions.cleanup()
-    
-    
 def main():
     """
     This function is the entry point of the Manga Downloader program. It searches and selects a manga, downloads its images,
     and cleans up the resources used by the program.
     """
     try:
-        web_interactions, file_operations, manga_downloader = instantiate_classes() # Instantiate WebInteractions, FileOperations, and MangaDownloader objects
-        chapters, series_name = get_manga_chapters_and_name(manga_downloader) # Search and select a manga
+        manga_downloader = instantiate_classes() # Instantiate MangaDownloader object
+        chapters, series_name = manga_downloader.search_and_select_manga() # Search and select a manga from the user's input
         if chapters and series_name:
             for chapter in chapters:
-                print_chapter_info(chapter) # Print the chapter number and name
-                download_chapter_images(manga_downloader, chapter, series_name) # Download the images from the chapter
-        cleanup_resources(web_interactions) # Clean up the resources used by the program
-    
-        
+                manga_downloader.print_chapter_info(chapter) # Print the chapter's index and name
+                manga_downloader.download_images_from_chapter(chapter['chapter_link'], series_name, chapter['chapter_number']) # Download images from the chapter
     except KeyboardInterrupt as e:
-        cleanup_resources(web_interactions)
-        print("\nQuitting...")
-        exit()
+        exit(0)
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
     finally:
-        cleanup_resources(web_interactions)
-
+        #web_interactions.cleanup()
+        exit()
 if __name__ == "__main__":
     main() # Run the main function

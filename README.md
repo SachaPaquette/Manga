@@ -4,12 +4,11 @@ Manga Downloader is a Python script designed for downloading manga chapters from
 
 ## Prerequisites
 
-Make sure you have the following installed:
+The prerequisites will be installed through the installation script:
 
 - Python 3
 - Chrome Browser
 - ChromeDriver (automatically managed by ChromeDriverManager)
-- MongoDB
 
 ## Usage
 
@@ -28,31 +27,26 @@ Make sure you have the following installed:
 3. **Install the required Python packages:**
 
     ```bash
-    pip install -r Requirements\requirements.txt
+    python install_dependencies.py
     ```
 
 4. **Configuration:**
 
-    Create a `.env` file in the project root and add the following environment variables:
+    Create a `.env` file in the project root and add the following environment variable:
 
     ```env
-    MONGODB_CONNECTION_STRING = "YOUR_MONGODB_CONNECTION"
     SAVE_PATH=/path/to/save/manga
     ```
 
     Replace `/path/to/save/manga` with the desired path to save manga images.
-    Replace `YOUR_MONGODB_CONNECTION` with your MongoDB connection string.
+    Otherwise, the default save path will be inside the project.
 
-5. **Run the scripts:**
-
-    ```bash
-    python mangafetch.py
-    ```
-    - Enter "Y" to start fetching the manga names and inserting them into your database.
+5. **Run the script:**
 
     ```bash
     python mangadownload.py
     ```
+
     - Enter the name of the manga when prompted.
     - Select the manga from the search results.
     - Wait for the chapters to be fetched and created.
