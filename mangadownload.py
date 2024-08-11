@@ -29,6 +29,7 @@ def main():
             for chapter in chapters:
                 manga_downloader.print_chapter_info(chapter) # Print the chapter's index and name
                 manga_downloader.download_images_from_chapter(chapter['chapter_link'], series_name, chapter['chapter_number']) # Download images from the chapter
+        
     except KeyboardInterrupt as e:
         exit(0)
     except Exception as e:
@@ -38,3 +39,4 @@ def main():
         exit()
 if __name__ == "__main__":
     main() # Run the main function
+    

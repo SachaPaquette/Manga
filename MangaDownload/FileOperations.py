@@ -1,4 +1,7 @@
 import os, requests, re, io, concurrent.futures
+# import threadpoolExecutor
+from concurrent.futures import ThreadPoolExecutor
+import zipfile
 from Config.config import Config
 # Configure logging
 from MangaDownload.WebInteractions import logger
@@ -134,7 +137,7 @@ class FileOperations:
 
     def bulk_save_png_links(self, save_path, page_data):
         """
-        Save multiple PNG images from URLs to the specified folder path in bulk.
+        Save multiple PNG images from URLs to a single .cbz file.
 
         Args:
             save_path (str): The path to save the manga.
@@ -143,19 +146,59 @@ class FileOperations:
         Returns:
             None
         """
-        
         def process_image(data):
             series_name, chapter_number, page_number, img_src = data
             try:
-                folder_path, _ = self.create_chapter_folder(save_path, series_name, chapter_number, page_number)
-                self.save_image_from_url(img_src, folder_path, self.create_screenshot_filename(page_number))
+                img_data = self.download_image(img_src)
+                return series_name, chapter_number, page_number, img_data
             except Exception as e:
                 logger.error(f"Error saving PNG link {img_src} for chapter {chapter_number}, page {page_number}: {e}")
-
+                return None
+        try:
         # Use ThreadPoolExecutor to parallelize the image saving process
-        with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
-            executor.map(process_image, page_data)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
+                image_data_list = list(executor.map(process_image, page_data))
 
+            # Create a .cbz file for the chapter
+            self.create_cbz_file(save_path, image_data_list)
+            
+            
+            
+            
+        except Exception as e:
+            logger.error(f"Error saving PNG links for chapter: {e}")
+
+    def create_cbz_file(self, save_path, image_data_list):
+        # Create a .cbz file for the chapter
+        try:
+            # Get the series name and chapter number from the first image data
+            series_name, chapter_number, _, _ = image_data_list[0]
+            # Create the folder path for the series
+            folder_path_test = os.path.join(save_path, self.sanitize_folder_name(series_name))
+            #folder_path = self.create_folder_path(save_path, self.sanitize_folder_name(series_name), chapter_number)
+            
+            # Create the .cbz file path
+            cbz_file_path = os.path.join(folder_path_test, f"Chapter {chapter_number}.cbz")
+            # Create a .cbz file
+            with zipfile.ZipFile(cbz_file_path, "w") as cbz_file:
+                for _, _, page_number, img_data in image_data_list:
+                    # Create the image filename
+                    
+                    # Add the image data to the .cbz file
+                    cbz_file.writestr(self.create_screenshot_filename(page_number), img_data)
+            logger.info(f"Saved chapter {chapter_number} as {cbz_file_path}")
+        except Exception as e:
+            logger.error(f"Error creating .cbz file for chapter {chapter_number}: {e}")
+
+
+    def download_image(self, img_src):
+        try:
+            response = requests.get(img_src)
+            response.raise_for_status()
+            return response.content
+        except requests.RequestException as e:
+            logger.error(f"Error downloading image from {img_src}: {e}")
+            return None
             
     def save_chapter_pages(self, series_name, chapter_number, pages):
         """

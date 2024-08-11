@@ -373,6 +373,8 @@ class MangaDownloader:
             list: A list of tuples containing page numbers and URLs.
         """
         try:
+            
+            
             return sorted(self.extract_png_urls(self.web_interactions.driver.get_log('performance'), png_pattern), key=lambda x: x[0])
         except Exception as e:
             logger.error(f"Error capturing network logs: {e}")

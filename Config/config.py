@@ -18,7 +18,7 @@ class Config:
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 OPR/77.0.4054.254",
     ]  # List of user agents to rotate through
     DEFAULT_SAVE_PATH = "./Mangas" # Default save path for the manga (Will be used if no save path is configured in the .env file)
-    
+    CRX_PATH = "Extensions/uBlock-Origin.crx"
 class ScriptConfig:
     windows_script = "./Scripts/windowsinstaller.ps1"
     linux_script = "./Scripts/linuxinstaller.sh"

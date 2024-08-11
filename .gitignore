@@ -4,3 +4,5 @@ Logs/*
 venv/
 __pycache__/
 *.pyc
+Extensions/uBlock/*
+manga/
