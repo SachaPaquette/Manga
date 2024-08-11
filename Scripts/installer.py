@@ -16,7 +16,7 @@ class Scripts:
         elif platform.system().lower() == 'windows':
             # Run the windows installation script
             subprocess.run(['powershell.exe', '-File', ScriptConfig.windows_script])
-            self.install_python_package(ScriptConfig.window_curses)
+            self.install_python_package(ScriptConfig.windows_curse)
         else:
             raise Exception(f"Unsupported operating system: {platform.system().lower()}")
         # Install the required python packages
