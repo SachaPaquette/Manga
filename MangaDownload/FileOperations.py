@@ -150,23 +150,26 @@ class FileOperations:
             series_name, chapter_number, page_number, img_src = data
             try:
                 img_data = self.download_image(img_src)
-                return series_name, chapter_number, page_number, img_data
+                if img_data:
+                    processed_img_data = self.processing_image(img_data)
+                    # Return a tuple for each image part
+                    return [(series_name, chapter_number, page_number + i, part) 
+                            for i, part in enumerate(processed_img_data)]
             except Exception as e:
                 logger.error(f"Error saving PNG link {img_src} for chapter {chapter_number}, page {page_number}: {e}")
-                return None
+            return None
         try:
-        # Use ThreadPoolExecutor to parallelize the image saving process
             with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
                 image_data_list = list(executor.map(process_image, page_data))
+            
+            # Flatten the list since each original image may produce multiple parts
+            flattened_image_data_list = [item for sublist in image_data_list if sublist for item in sublist]
 
             # Create a .cbz file for the chapter
-            self.create_cbz_file(save_path, image_data_list)
-            
-            
-            
-            
+            self.create_cbz_file(save_path, flattened_image_data_list)
         except Exception as e:
             logger.error(f"Error saving PNG links for chapter: {e}")
+
 
     def create_cbz_file(self, save_path, image_data_list):
         # Create a .cbz file for the chapter
@@ -175,10 +178,13 @@ class FileOperations:
             series_name, chapter_number, _, _ = image_data_list[0]
             # Create the folder path for the series
             folder_path_test = os.path.join(save_path, self.sanitize_folder_name(series_name))
+            print(folder_path_test)
             #folder_path = self.create_folder_path(save_path, self.sanitize_folder_name(series_name), chapter_number)
-            
+            # Create the folder if it doesn't exist
+            os.makedirs(folder_path_test, exist_ok=True)
+            print(f"Creating .cbz file for chapter {chapter_number}...")
             # Create the .cbz file path
-            cbz_file_path = os.path.join(folder_path_test, f"Chapter {chapter_number}.cbz")
+            cbz_file_path = os.path.join(folder_path_test, f"{series_name} Chapter {chapter_number}.cbz")
             # Create a .cbz file
             with zipfile.ZipFile(cbz_file_path, "w") as cbz_file:
                 for _, _, page_number, img_data in image_data_list:
@@ -199,7 +205,36 @@ class FileOperations:
         except requests.RequestException as e:
             logger.error(f"Error downloading image from {img_src}: {e}")
             return None
+    def processing_image(self, img_data):
+        # Function to check if an image's height is greater than 2000 pixels, to split the image if necessary
+        try:
             
+            print("Processing image...")
+            # Take the image data, check if the height is greater than 2000 pixels
+            img = Image.open(io.BytesIO(img_data))
+            
+            if img.height > 2000:
+                # Split the image into 1000 pixel height parts
+                img_parts = []
+                for i in range(0, img.height, 1000):
+                    img_part = img.crop((0, i, img.width, min(i + 1000, img.height)))
+                    img_part_bytes = io.BytesIO()
+                    img_part.save(img_part_bytes, format="PNG")
+                    img_parts.append(img_part_bytes.getvalue())
+                print(f"Split image into {len(img_parts)} parts.")
+                print("Image processed.")
+                print(img_parts)
+                return img_parts
+            
+            
+            return [img_data]
+        except Exception as e:
+            logger.error(f"Error processing image: {e}")
+            return None
+
+            
+        
+    
     def save_chapter_pages(self, series_name, chapter_number, pages):
         """
         Save the captured PNG links for the chapter.
