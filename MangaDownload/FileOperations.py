@@ -67,16 +67,8 @@ class FileOperations:
         """
         return os.path.join(save_path, sanitized_folder_name, chapter_number)
 
-    def create_screenshot_filename(self, page_number):
-        """Generate the screenshot filename. (eg: page_1.png)
-
-        Args:
-            page_number (int): The page number.
-
-        Returns:
-            string: The screenshot filename.
-        """
-        return f"page_{page_number}.png"
+    def create_screenshot_filename(self, page_number, part_number=0):
+        return f"page_{page_number}_{part_number}.png"
 
     def create_screenshot_filepath(self, folder_path, screenshot_filename):
         """Function to generate the screenshot filepath. This will be used to save the screenshot.
@@ -162,9 +154,15 @@ class FileOperations:
             with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
                 image_data_list = list(executor.map(process_image, page_data))
             
-            # Flatten the list since each original image may produce multiple parts
-            flattened_image_data_list = [item for sublist in image_data_list if sublist for item in sublist]
-
+            if image_data_list:
+                flattened_image_data_list = [item for sublist in image_data_list if sublist for item in sublist]
+                flattened_image_data_list.sort(key=lambda x: x[2])  # Sort by page number
+                print(f"Saving {len(flattened_image_data_list)} images for chapter ...")
+            else:
+                logger.error("image_data_list is None")
+                return
+            
+            
             # Create a .cbz file for the chapter
             self.create_cbz_file(save_path, flattened_image_data_list)
         except Exception as e:
@@ -178,7 +176,7 @@ class FileOperations:
             series_name, chapter_number, _, _ = image_data_list[0]
             # Create the folder path for the series
             folder_path_test = os.path.join(save_path, self.sanitize_folder_name(series_name))
-            print(folder_path_test)
+            
             #folder_path = self.create_folder_path(save_path, self.sanitize_folder_name(series_name), chapter_number)
             # Create the folder if it doesn't exist
             os.makedirs(folder_path_test, exist_ok=True)
@@ -186,12 +184,29 @@ class FileOperations:
             # Create the .cbz file path
             cbz_file_path = os.path.join(folder_path_test, f"{series_name} Chapter {chapter_number}.cbz")
             # Create a .cbz file
+            if os.path.exists(cbz_file_path):
+                os.remove(cbz_file_path)
+                
             with zipfile.ZipFile(cbz_file_path, "w") as cbz_file:
-                for _, _, page_number, img_data in image_data_list:
-                    # Create the image filename
+                for items in image_data_list:
+                    try:
+                        series_name, chapter_number, page_number, img_data = items
+                        
+                        # Create the screenshot filename
+                        screenshot_filename = self.create_screenshot_filename(page_number, len(cbz_file.namelist()))
+
+                        # Check if an image already exists with the same name
+                        if screenshot_filename in cbz_file.namelist():
+                            # If an image with the same name exists, add a number to the filename
+                            screenshot_filename = f"{screenshot_filename.split('.')[0]}_{len(cbz_file.namelist())}.{screenshot_filename.split('.')[1]}"
+                            print(f"Image with the same name exists. Renaming to {screenshot_filename}...")
+                        
+                        # Save the image to the .cbz file
+                        cbz_file.writestr(screenshot_filename, img_data)
+                    except Exception as e:
+                        logger.error(f"Error saving page {page_number} for chapter {chapter_number}: {e}")
                     
-                    # Add the image data to the .cbz file
-                    cbz_file.writestr(self.create_screenshot_filename(page_number), img_data)
+                     
             logger.info(f"Saved chapter {chapter_number} as {cbz_file_path}")
         except Exception as e:
             logger.error(f"Error creating .cbz file for chapter {chapter_number}: {e}")
@@ -208,31 +223,46 @@ class FileOperations:
     def processing_image(self, img_data):
         # Function to check if an image's height is greater than 2000 pixels, to split the image if necessary
         try:
-            
-            print("Processing image...")
-            # Take the image data, check if the height is greater than 2000 pixels
             img = Image.open(io.BytesIO(img_data))
             
-            if img.height > 2000:
-                # Split the image into 1000 pixel height parts
-                img_parts = []
-                for i in range(0, img.height, 1000):
-                    img_part = img.crop((0, i, img.width, min(i + 1000, img.height)))
-                    img_part_bytes = io.BytesIO()
-                    img_part.save(img_part_bytes, format="PNG")
-                    img_parts.append(img_part_bytes.getvalue())
-                print(f"Split image into {len(img_parts)} parts.")
-                print("Image processed.")
-                print(img_parts)
-                return img_parts
-            
-            
-            return [img_data]
+            # Check the image height
+            if img.height > 1000:
+                # Split the image into parts
+                return self.split_image(img)
+            return img_data       
         except Exception as e:
             logger.error(f"Error processing image: {e}")
             return None
 
+    def split_image(self, img):
+        width, height = img.size
+        # Calculate the number of parts to split the image into
+        num_parts = height // 1000 + 1
+        
+        # Split the image into parts
+        img_parts = []
+        
+        for i in range(num_parts):
+            # Calculate the crop box for each part
+            top = i * 1000
+            bottom = (i + 1) * 1000 if (i + 1) * 1000 < height else height
             
+            # Crop the image
+            img_part = img.crop((0, top, width, bottom))
+            
+            img_parts.append(img_part)
+            
+        # For each image part, convert it to bytes
+        return [self.convert_image_to_bytes(img_part) for img_part in img_parts]   
+            
+    def convert_image_to_bytes(self, img):
+        try:
+            img_byte_array = io.BytesIO()
+            img.save(img_byte_array, format="PNG")
+            return img_byte_array.getvalue()
+        except Exception as e:
+            logger.error(f"Error converting image to bytes: {e}")
+            return None
         
     
     def save_chapter_pages(self, series_name, chapter_number, pages):
