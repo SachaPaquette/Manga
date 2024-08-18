@@ -26,3 +26,40 @@ class ScriptConfig:
     SCRIPT_FILENAME = "installer"
     SCRIPT_LOG_PATH = "./Logs/Installer.log"
     windows_curse = "windows-curses"
+    javascript_network_script = """
+        (function() {
+            let open = XMLHttpRequest.prototype.open;
+            let send = XMLHttpRequest.prototype.send;
+            let fetch = window.fetch;
+            let activeRequests = 0;
+            let addRequest = () => activeRequests++;
+            let removeRequest = () => {
+                activeRequests = Math.max(0, activeRequests - 1);
+            };
+            XMLHttpRequest.prototype.open = function() {
+                addRequest();
+                this.addEventListener('load', removeRequest);
+                this.addEventListener('error', removeRequest);
+                this.addEventListener('abort', removeRequest);
+                return open.apply(this, arguments);
+            };
+            XMLHttpRequest.prototype.send = function() {
+                return send.apply(this, arguments);
+            };
+            window.fetch = function() {
+                addRequest();
+                return fetch.apply(this, arguments)
+                    .then(response => {
+                        removeRequest();
+                        return response;
+                    })
+                    .catch(error => {
+                        removeRequest();
+                        throw error;
+                    });
+            };
+            window.getActiveRequests = function() {
+                return activeRequests;
+            };
+        })();
+        """

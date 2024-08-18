@@ -28,7 +28,9 @@ def main():
         if chapters and series_name:
             for chapter in chapters:
                 manga_downloader.print_chapter_info(chapter) # Print the chapter's index and name
-                manga_downloader.download_images_from_chapter(chapter['chapter_link'], series_name, chapter['chapter_number']) # Download images from the chapter
+                # Create a tuple containing the chapter's link, series name, and chapter number
+                manga_chapter = chapter['chapter_link'], series_name, chapter['chapter_number']
+                manga_downloader.download_images_from_chapter(manga_chapter) # Download images from the chapter
         
     except KeyboardInterrupt as e:
         exit(0)

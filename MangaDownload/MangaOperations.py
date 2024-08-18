@@ -1,7 +1,7 @@
 import json,time, os, re
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import  NoSuchElementException, TimeoutException
-from Config.config import Config
+from Config.config import Config, ScriptConfig
 from MangaDownload.FileOperations import FileOperations
 from MangaDownload.WebInteractions import WebInteractions
 from MangaDownload.WebInteractions import logger
@@ -211,11 +211,14 @@ class MangaDownloader:
             return chapter_info if chapter_info else None
 
 
-    def download_images_from_chapter(self, chapter_link, series_name, chapter_number):
+    def download_images_from_chapter(self, manga_chapter):
         try:
-            if self.file_operations.check_chapter_folder_exist(series_name, chapter_number):
-                logger.info(f"Chapter {chapter_number} already downloaded. Skipping...")
+            # Unpack the manga chapter tuple
+            chapter_link, series_name, chapter_number = manga_chapter
+            # Check if the .cbz file already exists
+            if self.file_operations.check_cbz_file_exist(series_name, chapter_number):
                 return
+            
             # Navigate to the chapter link and process the chapter
             self.navigate_to_chapter(chapter_link)
             self.process_chapter(series_name, chapter_number)
@@ -256,44 +259,7 @@ class MangaDownloader:
             logger.error("Failed to navigate to chapter after multiple attempts.")
 
     def inject_network_monitoring_js(self):
-        script = """
-        (function() {
-            let open = XMLHttpRequest.prototype.open;
-            let send = XMLHttpRequest.prototype.send;
-            let fetch = window.fetch;
-            let activeRequests = 0;
-            let addRequest = () => activeRequests++;
-            let removeRequest = () => {
-                activeRequests = Math.max(0, activeRequests - 1);
-            };
-            XMLHttpRequest.prototype.open = function() {
-                addRequest();
-                this.addEventListener('load', removeRequest);
-                this.addEventListener('error', removeRequest);
-                this.addEventListener('abort', removeRequest);
-                return open.apply(this, arguments);
-            };
-            XMLHttpRequest.prototype.send = function() {
-                return send.apply(this, arguments);
-            };
-            window.fetch = function() {
-                addRequest();
-                return fetch.apply(this, arguments)
-                    .then(response => {
-                        removeRequest();
-                        return response;
-                    })
-                    .catch(error => {
-                        removeRequest();
-                        throw error;
-                    });
-            };
-            window.getActiveRequests = function() {
-                return activeRequests;
-            };
-        })();
-        """
-        self.web_interactions.driver.execute_script(script)
+        self.web_interactions.driver.execute_script(ScriptConfig.javascript_network_script)
 
     def wait_for_network_idle(self, timeout=30, poll_frequency=0.5):
         """

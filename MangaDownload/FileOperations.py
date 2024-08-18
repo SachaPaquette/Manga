@@ -239,21 +239,24 @@ class FileOperations:
         # Calculate the number of parts to split the image into
         num_parts = height // 1000 + 1
         
+        # Calculate the height of each part
+        part_height = height // num_parts
+        
         # Split the image into parts
         img_parts = []
         
         for i in range(num_parts):
             # Calculate the crop box for each part
-            top = i * 1000
-            bottom = (i + 1) * 1000 if (i + 1) * 1000 < height else height
+            top = i * part_height
+            bottom = (i + 1) * part_height if (i + 1) * part_height < height else height
             
             # Crop the image
             img_part = img.crop((0, top, width, bottom))
             
             img_parts.append(img_part)
-            
+        
         # For each image part, convert it to bytes
-        return [self.convert_image_to_bytes(img_part) for img_part in img_parts]   
+        return [self.convert_image_to_bytes(img_part) for img_part in img_parts]
             
     def convert_image_to_bytes(self, img):
         try:
@@ -315,14 +318,10 @@ class FileOperations:
 
 
     def prepare_save_path(self, series_name, chapter_number):
-        return os.path.join(self.save_path, self.sanitize_folder_name(series_name), str(chapter_number))
+        # Prepare the save path for the current chapter
+        return os.path.join(self.save_path, self.sanitize_folder_name(series_name), chapter_number)
     
-    def check_chapter_folder_exist(self, series_name, chapter_number):
-        """
-        Check if the folder for the current chapter already exists.
-
-        Returns:
-            bool: True if the folder exists, False otherwise.
-        """
-        return os.path.exists(self.prepare_save_path(series_name, "Chapter " + str(chapter_number)))
+    def check_cbz_file_exist(self, series_name, chapter_number):
+        # Check if a .cbz file already exists for the chapter
+        return os.path.exists(os.path.join(self.save_path, self.sanitize_folder_name(series_name), f"{series_name} Chapter {chapter_number}.cbz"))
 
