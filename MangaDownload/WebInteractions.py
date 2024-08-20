@@ -33,33 +33,24 @@ class WebInteractions:
             
     def is_button_clickable(self, button):
         """
-        Check if a button is clickable by verifying its class attribute.
+        Check if a button is clickable by verifying its class attribute and other conditions.
 
         Args:
-            button (WebElement): The button element (svg element).
+            button (WebElement): The button element.
 
         Returns:
             bool: True if the button is clickable, False otherwise.
         """
         try:
-            # Get the button element from its svg element
-            button_element = button.find_element(By.XPATH, '../..')
+            if 'disabled' in button.get_attribute('class') or button.value_of_css_property('pointer-events') == 'none' or button.get_attribute('aria-disabled') == 'true':
+                return False
             
-            # Check if the button is disabled
-            if 'disabled' in button_element.get_attribute('class'):
-                return False  # Button is disabled
-            
-            return True  # Button is enabled
-        except NoSuchElementException:
-            logger.error("Button or its parent elements not found")
-            return False
+            return True
+        
         except Exception as e:
             logger.error(f"Error checking button clickable status: {e}")
             return False
 
-    def press_right_arrow_key(self):
-        ActionChains(self.driver).send_keys(
-                    Keys.ARROW_RIGHT).perform()
 
     def click_next_page(self):
         """
@@ -69,10 +60,10 @@ class WebInteractions:
         bool: True if the button is clicked successfully, False otherwise.
         """
         try:
-            next_page_button = self.driver.find_element(By.CLASS_NAME, Config.NEXT_PAGE_BUTTON)
+            # Find the parent element of the next page button
+            next_page_button_parent = self.driver.find_element(By.CLASS_NAME, Config.NEXT_PAGE_BUTTON).find_element(By.XPATH, '../..')
 
-            if next_page_button and self.is_button_clickable(next_page_button):
-                # Check if the element has a click handler by dispatching a mouse event.
+            if next_page_button_parent and self.is_button_clickable(next_page_button_parent):
                 self.driver.execute_script("""
                     var event = new MouseEvent('click', {
                         view: window,
@@ -80,13 +71,13 @@ class WebInteractions:
                         cancelable: true
                     });
                     arguments[0].dispatchEvent(event);
-                """, next_page_button)
+                """, next_page_button_parent)
                 return True
-            else:
-                return False
+            return False
 
         except NoSuchElementException:
             # Next page button not found (last page reached)
+            print("Next page button not found")
             return False
 
         except ElementClickInterceptedException as e:
@@ -95,6 +86,7 @@ class WebInteractions:
 
         except Exception as e:
             logger.error(f"Error clicking next page button: {e}")
+            print(e)
             return False
 
 
