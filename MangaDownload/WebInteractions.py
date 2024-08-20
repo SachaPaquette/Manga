@@ -63,16 +63,24 @@ class WebInteractions:
 
     def click_next_page(self):
         """
-        Click the next page button if it exists and is clickable.
+        Click the next page button using JavaScript if it exists and is clickable.
 
         Returns:
-            bool: True if the button is clicked successfully, False otherwise.
+        bool: True if the button is clicked successfully, False otherwise.
         """
         try:
             next_page_button = self.driver.find_element(By.CLASS_NAME, Config.NEXT_PAGE_BUTTON)
-            
+
             if next_page_button and self.is_button_clickable(next_page_button):
-                ActionChains(self.driver).move_to_element(next_page_button).click().perform()
+                # Check if the element has a click handler by dispatching a mouse event.
+                self.driver.execute_script("""
+                    var event = new MouseEvent('click', {
+                        view: window,
+                        bubbles: true,
+                        cancelable: true
+                    });
+                    arguments[0].dispatchEvent(event);
+                """, next_page_button)
                 return True
             else:
                 return False
@@ -88,6 +96,7 @@ class WebInteractions:
         except Exception as e:
             logger.error(f"Error clicking next page button: {e}")
             return False
+
 
 
     def wait_until(self, condition, timeout=10, multiple=False):

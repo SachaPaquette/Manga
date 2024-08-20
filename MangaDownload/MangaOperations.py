@@ -61,7 +61,7 @@ class MangaDownloader:
             raise
 
         return chapters_array if chapters_array else []
-
+    
     def collect_chapters(self):
         """
         Collects chapters from the current and subsequent pages.
@@ -70,15 +70,11 @@ class MangaDownloader:
         :rtype: list
         """
         chapters_array = []
-
         while True:
             chapters_array += self.process_chapter_cards(self.web_interactions.driver.find_elements(By.CLASS_NAME, Config.CHAPTER_CARDS))
-
             if not self.web_interactions.click_next_page():
                 break
-
             self.web_interactions.wait_until_page_loaded(1)
-
         return chapters_array
   
     def fill_missing_chapter_numbers(self, chapters_array):
@@ -104,8 +100,7 @@ class MangaDownloader:
 
     def process_chapter_cards(self, chapter_cards):
         """
-        Extracts chapter information from the given chapter cards and returns an array of chapter info objects
-        along with the number of the first chapter.
+        Extracts chapter information from the given chapter cards and returns an array of chapter info objects.
 
         Args:
             chapter_cards (list): A list of chapter cards to extract information from.
@@ -114,25 +109,17 @@ class MangaDownloader:
             list: A list of chapter info objects.
         """
         chapters_array = []
+        previous_chapter_name = None
 
         for chapter in chapter_cards:
             try:
-                # Extract the chapter info from the chapter card
                 chapter_info = self.extract_chapter_info(chapter)
-                if chapter_info is None:
-                    logger.warning(f"Chapter info extraction returned None for chapter: {chapter}")
-                    continue
-
-                # Check if the chapter number has already been added
-                if chapter_info["chapter_name"] != self.previous_chapter_name:
+                if chapter_info and chapter_info["chapter_name"] != previous_chapter_name:
                     chapters_array.append(chapter_info)
-                    self.previous_chapter_name = chapter_info["chapter_name"]
-
-            except NoSuchElementException as e:
-                logger.error(f"Error while fetching chapter: {e}")
+                    previous_chapter_name = chapter_info["chapter_name"]
             except Exception as e:
-                logger.error(f"Error processing chapter cards: {e}")
-                continue
+                logger.error(f"Error processing chapter card: {e}")
+
         return chapters_array
 
 
@@ -151,64 +138,46 @@ class MangaDownloader:
 
     def find_chapter_link(self, chapter):
         """
-        Finds the chapter link elements and flag image elements for a given chapter.
+        Finds the chapter link element and URL for a given chapter.
 
         Args:
-            chapter: The chapter element to search for links and flag images.
+            chapter: The chapter element to search for links.
 
         Returns:
             tuple: A tuple (link element, link URL) corresponding to the English title, or None if not found.
         """
         try:
-            # Find all chapter link elements within the chapter
-            chapter_link_elements = chapter.find_elements(by=By.CLASS_NAME, value=Config.CHAPTER_LINK)
-            
-            for link in chapter_link_elements:
-                try:
-                    # Check if the link has an image element with title attribute 'English'
-                    img_element = link.find_element(by=By.TAG_NAME, value=Config.IMG)
-                    if img_element.get_attribute('title') == 'English':
-                        link_url = link.find_element(by=By.TAG_NAME, value=Config.HYPERLINK).get_attribute(Config.HREF)
-                        if link_url and not self.unsupported_website(link_url):
-                            return link, link_url
-                except NoSuchElementException:
-                    continue
-
+            for link in chapter.find_elements(by=By.CLASS_NAME, value=Config.CHAPTER_LINK):
+                img_element = link.find_element(by=By.TAG_NAME, value=Config.IMG)
+                if img_element.get_attribute('title') == 'English':
+                    link_url = link.find_element(by=By.TAG_NAME, value=Config.HYPERLINK).get_attribute(Config.HREF)
+                    if link_url and not self.unsupported_website(link_url):
+                        return link, link_url
         except NoSuchElementException as e:
             logger.error(f"No such element found: {e}")
         except Exception as e:
             logger.error(f"Error finding chapter link: {e}")
-
         return None
 
-
-
-
     def extract_chapter_info(self, chapter):
-            """
-            Extracts chapter information from the given chapter element.
+        """
+        Extracts chapter information from the given chapter element.
 
-            Args:
-                chapter: The chapter element to extract information from.
+        Args:
+            chapter: The chapter element to extract information from.
 
-            Returns:
-                A dictionary containing the extracted chapter information, including the chapter number,
+        Returns:
+            dict: A dictionary containing the extracted chapter information, including the chapter number,
                 chapter name, and chapter link. Returns None if the chapter information could not be extracted.
-            """
+        """
+        link_element, link_url = self.find_chapter_link(chapter)
+        if not link_element or not link_url:
+            return None
 
-            chapter_link_elements, link = self.find_chapter_link(chapter)
-            if  chapter_link_elements is None or link is None:
-                return None
-            # split the text into a list of strings and get the first element
-            chapter_name = chapter_link_elements.text.split('\n')[0]
-
-            # remove leading and trailing spaces
-            chapter_info = {
-                'chapter_name': chapter_name,
-                'chapter_link': link
-            }    
-            
-            return chapter_info if chapter_info else None
+        return {
+            'chapter_name': link_element.text.strip().split('\n')[0],
+            'chapter_link': link_url
+        }
 
 
     def download_images_from_chapter(self, manga_chapter):
@@ -403,22 +372,6 @@ class MangaDownloader:
         except Exception as e:
             logger.error(f"Error extracting page number from URL {url}: {e}")
         return None
-        
-    def save_chapter_pages(self, series_name, chapter_number, pages):
-        """
-        Save the captured PNG links for the chapter.
-
-        Args:
-            series_name (str): The name of the manga series.
-            chapter_number (int): The number of the chapter.
-            pages (list): A list of tuples containing page numbers and URLs.
-
-        Returns:
-            None
-        """
-        for page_number, page_url in pages:
-            print(f"Saving page {page_number} for chapter {chapter_number}...")
-            self.file_operations.save_png_links(self.save_path, series_name, chapter_number, page_number, page_url)
         
     def search_and_select_manga(self):
         try:
