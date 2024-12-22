@@ -142,31 +142,35 @@ class FileOperations:
             series_name, chapter_number, page_number, img_src = data
             try:
                 img_data = self.download_image(img_src)
-                if img_data:
-                    processed_img_data = self.processing_image(img_data)
-                    # Return a tuple for each image part
-                    return [(series_name, chapter_number, page_number + i, part) 
-                            for i, part in enumerate(processed_img_data)]
+                if not img_data:
+                    logger.error(f"Failed to download image from {img_src}")
+                    return None
+                
+                # Return a single tuple (no need for enumerate)
+                return (series_name, chapter_number, page_number, img_data)
             except Exception as e:
                 logger.error(f"Error saving PNG link {img_src} for chapter {chapter_number}, page {page_number}: {e}")
             return None
+
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
                 image_data_list = list(executor.map(process_image, page_data))
             
             if image_data_list:
-                flattened_image_data_list = [item for sublist in image_data_list if sublist for item in sublist]
-                flattened_image_data_list.sort(key=lambda x: x[2])  # Sort by page number
-                print(f"Saving {len(flattened_image_data_list)} images for chapter ...")
+                # Filter out None values and sort by page number
+                valid_image_data_list = [item for item in image_data_list if item]
+                valid_image_data_list.sort(key=lambda x: x[2])  # Sort by page number
+                print(f"Saving {len(valid_image_data_list)} images for chapter ...")
             else:
-                logger.error("image_data_list is None")
+                logger.error("No valid image data to save.")
                 return
             
-            
             # Create a .cbz file for the chapter
-            self.create_cbz_file(flattened_image_data_list)
+            self.create_cbz_file(valid_image_data_list)
         except Exception as e:
             logger.error(f"Error saving PNG links for chapter: {e}")
+
+
 
 
     def create_cbz_filename(self, series_name, chapter_number):
@@ -188,72 +192,67 @@ class FileOperations:
             
             cbz_file_path = self.join_cbz_filename(folder_path, self.create_cbz_filename(series_name, chapter_number))
             print(f"Creating .cbz file for chapter {chapter_number}...")
-            
+
             with zipfile.ZipFile(cbz_file_path, "w") as cbz_file:
                 for series_name, chapter_number, page_number, img_data in image_data_list:
+                    # Validate img_data
+                    if not isinstance(img_data, bytes) or not img_data:
+                        logger.error(f"Invalid image data for page {page_number}. Skipping...")
+                        continue
+
+                    # Generate unique screenshot filename
                     screenshot_filename = self.get_screenshot_filename(page_number, cbz_file)
                     cbz_file.writestr(screenshot_filename, img_data)
-            
+
             logger.info(f"Saved chapter {chapter_number} as {cbz_file_path}")
         except Exception as e:
             logger.error(f"Error creating .cbz file for chapter {chapter_number}: {e}")
+
+
 
     def get_series_and_chapter_info(self, image_data_list):
         return image_data_list[0][:2]
 
     def get_screenshot_filename(self, page_number, cbz_file):
-        filename = self.create_screenshot_filename(page_number, len(cbz_file.namelist()))
-        if filename in cbz_file.namelist():
-            filename = f"{filename.split('.')[0]}_{len(cbz_file.namelist())}.{filename.split('.')[1]}"
+        # Generate base filename
+        base_filename = self.create_screenshot_filename(page_number, page_number)
+        extension = base_filename.split('.')[-1]
+        name = '.'.join(base_filename.split('.')[:-1])
+
+        # Ensure uniqueness by appending an index if the filename exists
+        filename = base_filename
+        counter = 1
+        while filename in cbz_file.namelist():
+            filename = f"{name}_{counter}.{extension}"
+            counter += 1
             print(f"Image with the same name exists. Renaming to {filename}...")
+
         return filename
+
 
 
     def download_image(self, img_src):
         try:
-            response = requests.get(img_src)
+            headers = {'User-Agent': 'Mozilla/5.0'}  # Optional: Add headers to mimic a browser
+            response = requests.get(img_src, headers=headers, timeout=10, stream=True)
             response.raise_for_status()
-            return response.content
+
+            # Check if the response is an image
+            content_type = response.headers.get('Content-Type', '')
+            if not content_type.startswith('image/'):
+                logger.error(f"URL {img_src} did not return an image. Content-Type: {content_type}")
+                return None
+
+            # Read the content in chunks for large images
+            img_data = b"".join(chunk for chunk in response.iter_content(1024))
+            return img_data
+        except requests.Timeout:
+            logger.error(f"Timeout while downloading image from {img_src}")
         except requests.RequestException as e:
             logger.error(f"Error downloading image from {img_src}: {e}")
-            return None
-    def processing_image(self, img_data):
-        try:
-            img = Image.open(io.BytesIO(img_data))
-            
-            # Split image into parts
-            if img.height > 1000:
-                return self.split_image(img)
-            
-            # Save image with optimization
-            img_byte_array = io.BytesIO()
-            img.save(img_byte_array, format="PNG", optimize=True)
-            return img_byte_array.getvalue()
-        except Exception as e:
-            logger.error(f"Error processing image: {e}")
-            return None
-  
-    def split_image(self, img):
-        width, height = img.size
-        num_parts = height // 1000 + 1
-        part_height = height // num_parts
+        return None
 
-        # Split the image into parts using a generator expression
-        img_parts = (img.crop((0, i*part_height, width, min((i+1)*part_height, height))) 
-                    for i in range(num_parts))
-
-        # Convert each part to bytes using a generator expression
-        return (self.convert_image_to_bytes(img_part) for img_part in img_parts)
     
-    def convert_image_to_bytes(self, img):
-        try:
-            img_byte_array = io.BytesIO()
-            img.save(img_byte_array, format="PNG")
-            return img_byte_array.getvalue()
-        except Exception as e:
-            logger.error(f"Error converting image to bytes: {e}")
-            return None
-        
     
     def save_chapter_pages(self, series_name, chapter_number, pages):
         """
