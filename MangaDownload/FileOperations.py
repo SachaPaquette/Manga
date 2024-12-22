@@ -54,78 +54,14 @@ class FileOperations:
         return sanitized_name if sanitized_name else "UnknownManga"
 
 
-    def create_folder_path(self, save_path, sanitized_folder_name, chapter_number):
-        """Function to generate the folder path. This will be used to save the manga chapters.
-
-        Args:
-            save_path (string): The path to save the manga.
-            sanitized_folder_name (string): The sanitized folder name.
-            chapter_number (int): The chapter number.
-
-        Returns:
-            string: The folder path.
-        """
-        return os.path.join(save_path, sanitized_folder_name, chapter_number)
 
     def create_screenshot_filename(self, page_number, part_number=0):
         return f"page_{page_number}_{part_number}.png"
 
-    def create_screenshot_filepath(self, folder_path, screenshot_filename):
-        """Function to generate the screenshot filepath. This will be used to save the screenshot.
 
-        Args:
-            folder_path (string): The folder path to save the screenshot.
-            screenshot_filename (string): The screenshot filename.
 
-        Returns:
-            string: The screenshot filepath.
-        """
-        return os.path.join(folder_path, screenshot_filename)
 
-    def create_chapter_folder(self, save_path, series_name, chapter_number, page_number=None):
-        """
-        Creates the folder path for a chapter and optionally the screenshot filepath for a page.
-        This function also creates the folder if it doesn't exist.
 
-        Args:
-            save_path (str): The path to save the manga.
-            series_name (str): The name of the manga series.
-            chapter_number (str): The chapter number. (e.g., Chapter 1)
-            page_number (int, optional): The page number. Defaults to None.
-
-        Returns:
-            tuple: A tuple containing the folder path and optionally the screenshot filepath.
-        """
-        # Sanitize the series name and create the folder path
-        folder_path = self.create_folder_path(save_path, self.sanitize_folder_name(series_name), f"Chapter {chapter_number}")
-        # Create the folder if it doesn't exist
-        os.makedirs(folder_path, exist_ok=True)
-        # If page number is provided, create the screenshot filepath
-        if page_number:
-            return folder_path, self.create_screenshot_filepath(folder_path, self.create_screenshot_filename(page_number))
-        return folder_path
-
-    def save_png_links(self, save_path, series_name, chapter_number, page_number, img_src):
-        """
-        Save a PNG image from a URL to the specified folder path, using the chapter and page numbers.
-
-        Args:
-            save_path (str): The path to save the manga.
-            series_name (str): The name of the manga series.
-            chapter_number (int or str): The chapter number.
-            page_number (int): The page number.
-            img_src (str): The URL of the PNG image to save.
-
-        Returns:
-            int: The next page number.
-        """
-        try:
-            folder_path, _ = self.create_chapter_folder(save_path, series_name, chapter_number, page_number)
-            self.save_image_from_url(img_src, folder_path, self.create_screenshot_filename(page_number))
-            return page_number + 1
-        except Exception as e:
-            logger.error(f"Error saving PNG link {img_src} for chapter {chapter_number}, page {page_number}: {e}")
-            return page_number  # Return the current page number if there's an error
 
     def bulk_save_png_links(self, save_path, page_data):
         """
@@ -177,20 +113,25 @@ class FileOperations:
         # Create the .cbz filename for the chapter
         return f"{series_name} Chapter {chapter_number}.cbz"
 
-    def join_cbz_filename(self, folder_path, cbz_filename):
+    def create_cbz_folder_path(self, folder_path, cbz_filename):
+        # Use the existing folder_path directly for the .cbz file
         return os.path.join(folder_path, cbz_filename)
 
+
     def create_folder_path(self, series_name):
-        # Create the folder path for the series
-        return os.path.join(self.save_path, self.sanitize_folder_name(series_name))
+        # Get the first letter of the series name
+        sanitized_series_name = self.sanitize_folder_name(series_name)
+        
+        # Create the folder path for the series ex: ./Mangas/A/Attack on Titan
+        return os.path.join(self.save_path, sanitized_series_name[0].upper(), sanitized_series_name)
     
     def create_cbz_file(self, image_data_list):
         try:
             series_name, chapter_number = self.get_series_and_chapter_info(image_data_list)
             folder_path = self.create_folder_path(series_name)
             os.makedirs(folder_path, exist_ok=True)
-            
-            cbz_file_path = self.join_cbz_filename(folder_path, self.create_cbz_filename(series_name, chapter_number))
+            cbz_file_path = self.create_cbz_folder_path(folder_path, self.create_cbz_filename(series_name, chapter_number))
+            #cbz_file_path = self.join_cbz_filename(folder_path, self.create_cbz_filename(series_name, chapter_number))
             print(f"Creating .cbz file for chapter {chapter_number}...")
 
             with zipfile.ZipFile(cbz_file_path, "w") as cbz_file:
@@ -308,6 +249,9 @@ class FileOperations:
         return os.path.join(self.save_path, self.sanitize_folder_name(series_name), chapter_number)
     
     def check_cbz_file_exist(self, series_name, chapter_number):
-        # Check if a .cbz file already exists for the chapter
-        return os.path.exists(os.path.join(self.save_path, self.sanitize_folder_name(series_name), f"{series_name} Chapter {chapter_number}.cbz"))
-
+        # Generate the sanitized series folder path
+        folder_path = self.create_folder_path(series_name)
+        # Generate the .cbz file path for the chapter
+        cbz_file_path = self.create_cbz_folder_path(folder_path, self.create_cbz_filename(series_name, chapter_number))
+        # Check if the .cbz file already exists
+        return os.path.exists(cbz_file_path)
