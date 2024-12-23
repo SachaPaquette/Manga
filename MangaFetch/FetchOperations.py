@@ -143,5 +143,3 @@ def fetch_and_process_manga_cards(driver, manga_name):
     """
     return [manga_info for manga_card in fetch_manga_cards(driver, manga_name)
             if (manga_info := extract_manga_info(manga_card))]
-
-

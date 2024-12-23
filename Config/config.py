@@ -19,6 +19,8 @@ class Config:
     ]  # List of user agents to rotate through
     DEFAULT_SAVE_PATH = "./Mangas" # Default save path for the manga (Will be used if no save path is configured in the .env file)
     CRX_PATH = "Extensions/uBlock-Origin.crx"
+    FIRST_PAGE_CLASS = "chapter-grid.flex-grow"
+    PAGE_WRAP_CLASS = "min-w-0.relative.pages-wrap.md--reader-pages"
 class ScriptConfig:
     windows_script = "./Scripts/windowsinstaller.ps1"
     linux_script = "./Scripts/linuxinstaller.sh"

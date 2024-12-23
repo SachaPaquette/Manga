@@ -1,23 +1,26 @@
 import os, requests, re, io, concurrent.futures
+import time
 # import threadpoolExecutor
 from concurrent.futures import ThreadPoolExecutor
 import zipfile
 from Config.config import Config
 # Configure logging
 from MangaDownload.WebInteractions import logger
+from MangaDownload.WebInteractions import WebInteractions
+
 from PIL import Image
 import pyzipper
 class FileOperations:
-    failed_images = []  # Array to store the images that failed to save
-
-    def __init__(self, web_interactions):
+    def __init__(self, web_interactions=None):
         """Initialize the FileOperations instance. 
 
         Args:
             web_interactions (WebInteractions): The WebInteractions instance.
             driver (WebDriver): The Selenium WebDriver instance.
         """
-        # Initialize the WebInteractions instance
+        if not web_interactions:
+            from MangaDownload.WebInteractions import WebInteractions
+            web_interactions = WebInteractions()
         self.web_interactions = web_interactions
         # Initialize the WebDriver instance
         self.driver = web_interactions.driver
@@ -29,13 +32,12 @@ class FileOperations:
         self.unique_base64_data = set()
         # Store the last loaded image source (to check if the image is loaded)
         self.last_loaded_img_src = None
+        self.max_workers_number = 30
         
-        if os.getenv("SAVE_PATH") is not None:
-            self.save_path = os.getenv("SAVE_PATH")
-        else:
-            print("SAVE_PATH environment variable not found.")
-            self.save_path = Config.DEFAULT_SAVE_PATH
-            print(f"Using default save path to save mangas: {self.save_path}")
+        self.save_path = os.getenv("SAVE_PATH", Config.DEFAULT_SAVE_PATH)
+        if not os.path.isdir(self.save_path):
+            raise ValueError(f"Save path '{self.save_path}' is not a valid directory.")
+
 
     def sanitize_folder_name(self, folder_name):
         """
@@ -63,12 +65,11 @@ class FileOperations:
 
 
 
-    def bulk_save_png_links(self, save_path, page_data):
+    def bulk_save_png_links(self, page_data):
         """
         Save multiple PNG images from URLs to a single .cbz file.
 
         Args:
-            save_path (str): The path to save the manga.
             page_data (list): A list of tuples containing series name, chapter number, page number, and image URL.
 
         Returns:
@@ -81,30 +82,32 @@ class FileOperations:
                 if not img_data:
                     logger.error(f"Failed to download image from {img_src}")
                     return None
-                
-                # Return a single tuple (no need for enumerate)
                 return (series_name, chapter_number, page_number, img_data)
             except Exception as e:
                 logger.error(f"Error saving PNG link {img_src} for chapter {chapter_number}, page {page_number}: {e}")
             return None
 
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
+            # Ensure all images are loaded
+            #if not self.web_interactions.wait_for_images_to_load():
+             #   logger.warning("Not all images were fully loaded. Proceeding with available images.")
+            # Process images concurrently
+            with ThreadPoolExecutor(max_workers=self.max_workers_number) as executor:
                 image_data_list = list(executor.map(process_image, page_data))
-            
+
             if image_data_list:
-                # Filter out None values and sort by page number
                 valid_image_data_list = [item for item in image_data_list if item]
                 valid_image_data_list.sort(key=lambda x: x[2])  # Sort by page number
                 print(f"Saving {len(valid_image_data_list)} images for chapter ...")
             else:
                 logger.error("No valid image data to save.")
                 return
-            
+
             # Create a .cbz file for the chapter
             self.create_cbz_file(valid_image_data_list)
         except Exception as e:
             logger.error(f"Error saving PNG links for chapter: {e}")
+
 
 
 
@@ -131,7 +134,6 @@ class FileOperations:
             folder_path = self.create_folder_path(series_name)
             os.makedirs(folder_path, exist_ok=True)
             cbz_file_path = self.create_cbz_folder_path(folder_path, self.create_cbz_filename(series_name, chapter_number))
-            #cbz_file_path = self.join_cbz_filename(folder_path, self.create_cbz_filename(series_name, chapter_number))
             print(f"Creating .cbz file for chapter {chapter_number}...")
 
             with zipfile.ZipFile(cbz_file_path, "w") as cbz_file:
@@ -141,8 +143,8 @@ class FileOperations:
                         logger.error(f"Invalid image data for page {page_number}. Skipping...")
                         continue
 
-                    # Generate unique screenshot filename
-                    screenshot_filename = self.get_screenshot_filename(page_number, cbz_file)
+                    # Pass cbz_file.namelist() instead of cbz_file
+                    screenshot_filename = self.get_screenshot_filename(page_number, cbz_file.namelist())
                     cbz_file.writestr(screenshot_filename, img_data)
 
             logger.info(f"Saved chapter {chapter_number} as {cbz_file_path}")
@@ -154,39 +156,48 @@ class FileOperations:
     def get_series_and_chapter_info(self, image_data_list):
         return image_data_list[0][:2]
 
-    def get_screenshot_filename(self, page_number, cbz_file):
+    def get_screenshot_filename(self, page_number, existing_files):
         # Generate base filename
         base_filename = self.create_screenshot_filename(page_number, page_number)
         extension = base_filename.split('.')[-1]
         name = '.'.join(base_filename.split('.')[:-1])
 
-        # Ensure uniqueness by appending an index if the filename exists
+        # Ensure uniqueness using a set for efficiency
         filename = base_filename
-        counter = 1
-        while filename in cbz_file.namelist():
-            filename = f"{name}_{counter}.{extension}"
-            counter += 1
-            print(f"Image with the same name exists. Renaming to {filename}...")
+        if filename not in existing_files:
+            return filename
 
-        return filename
+        # Find the next available unique filename
+        for counter in range(1, len(existing_files) + 2):
+            filename = f"{name}_{counter}.{extension}"
+            if filename not in existing_files:
+                return filename
 
 
 
     def download_image(self, img_src):
+        """
+        Download an image from the given URL.
+
+        Args:
+            img_src (str): The URL of the image to download.
+
+        Returns:
+            bytes or None: The binary content of the image if successful, None otherwise.
+        """
         try:
-            headers = {'User-Agent': 'Mozilla/5.0'}  # Optional: Add headers to mimic a browser
-            response = requests.get(img_src, headers=headers, timeout=10, stream=True)
-            response.raise_for_status()
+            headers = {'User-Agent': 'Mozilla/5.0'} 
+            with requests.get(img_src, headers=headers, timeout=10, stream=True) as response:
+                response.raise_for_status()
 
-            # Check if the response is an image
-            content_type = response.headers.get('Content-Type', '')
-            if not content_type.startswith('image/'):
-                logger.error(f"URL {img_src} did not return an image. Content-Type: {content_type}")
-                return None
+                # Validate the content type
+                content_type = response.headers.get('Content-Type', '')
+                if not content_type.startswith('image/'):
+                    logger.error(f"URL {img_src} did not return an image. Content-Type: {content_type}")
+                    return None
 
-            # Read the content in chunks for large images
-            img_data = b"".join(chunk for chunk in response.iter_content(1024))
-            return img_data
+                # Read the image in chunks
+                return b"".join(chunk for chunk in response.iter_content(chunk_size=8192) if chunk)
         except requests.Timeout:
             logger.error(f"Timeout while downloading image from {img_src}")
         except requests.RequestException as e:
@@ -214,7 +225,7 @@ class FileOperations:
             for page_number, page_url in pages:
                 page_data.append((series_name, chapter_number, page_number, page_url ))
             print(f"Saving {len(page_data)} pages for chapter {chapter_number}...")
-            self.bulk_save_png_links(self.save_path, page_data)
+            self.bulk_save_png_links(page_data)
         except Exception as e:
             logger.error(f"Error saving chapter pages for chapter {chapter_number}: {e}")
         
