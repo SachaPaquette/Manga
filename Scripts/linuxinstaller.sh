@@ -1,57 +1,74 @@
 #!/bin/bash
 
+# Exit on errors
+set -e
+
+CHROME_DEB_URL="https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb"
+CHROME_RPM_URL="https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm"
+DEPENDENCIES=("wget" "curl" "dpkg" "apt-get" "snap")
+
 # Function to check if a program is installed
 check_installation() {
-    if which $1 > /dev/null 2>&1; then
-        echo "$1 is installed."
+    if command -v "$1" &>/dev/null; then
+        echo "$1 is already installed."
     else
-        echo "$1 is not installed."
+        echo "$1 is not installed. Attempting to install..."
+        return 1
     fi
 }
 
-# Function to install a program using apt-get
-install_program() {
-    echo "Installing $1..."
-    sudo apt-get install $1
-    if [ $? -ne 0 ]; then
-        echo "Error installing $1"
-        exit 1
-    fi
+install_dependencies() {
+    for dep in "${DEPENDENCIES[@]}"; do
+        if ! check_installation "$dep"; then
+            sudo apt-get update
+            sudo apt-get install -y "$dep"
+        fi
+    done
 }
 
-# Check the operating system
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    # Check if google-chrome is installed
-    check_installation "google-chrome"
-    
-    # Install Google Chrome if not installed
-    if ! which google-chrome > /dev/null 2>&1; then
+install_chrome() {
+    if command -v google-chrome &>/dev/null; then
+        echo "Google Chrome is already installed."
+    else
+        echo "Installing Google Chrome..."
         if [ -f /etc/debian_version ]; then
-            wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-            sudo dpkg -i google-chrome-stable_current_amd64.deb
-            sudo apt-get install -f  
-            rm google-chrome-stable_current_amd64.deb
+            wget -q $CHROME_DEB_URL -O google-chrome.deb
+            sudo dpkg -i google-chrome.deb || sudo apt-get -f install -y
+            rm google-chrome.deb
         elif [ -f /etc/redhat-release ]; then
-            # For RPM-based distributions
-            echo "Detected RPM-based distribution."
-            wget https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm
-            sudo yum localinstall google-chrome-stable_current_x86_64.rpm -y
-            rm google-chrome-stable_current_x86_64.rpm
+            wget -q $CHROME_RPM_URL -O google-chrome.rpm
+            sudo yum localinstall -y google-chrome.rpm
+            rm google-chrome.rpm
         elif [ -f /etc/arch-release ]; then
-            # For Arch-based distributions
             echo "Detected Arch-based distribution."
             sudo pacman -Syu --noconfirm
-            wget https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm
-            sudo pacman -U --noconfirm google-chrome-stable_current_x86_64.rpm
-            rm google-chrome-stable_current_x86_64.rpm
+            wget -q $CHROME_RPM_URL -O google-chrome.rpm
+            sudo pacman -U --noconfirm google-chrome.rpm
+            rm google-chrome.rpm
         else
-            echo "Operating system not supported."
+            echo "Unsupported Linux distribution."
             exit 1
         fi
     fi
-else 
-    echo "Operating system not supported."
-    exit 1
-fi
+}
 
-echo "Now installing Python's dependecies..."
+install_python_dependencies() {
+    echo "Installing Python dependencies..."
+    if command -v pip &>/dev/null; then
+        pip install -r requirements.txt
+    else
+        echo "Python pip is not installed. Installing pip..."
+        sudo apt-get install -y python3-pip
+        pip install -r requirements.txt
+    fi
+}
+
+main() {
+    echo "Starting installation process..."
+    install_dependencies
+    install_chrome
+    install_python_dependencies
+    echo "Installation complete!"
+}
+
+main
