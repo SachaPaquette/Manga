@@ -8,7 +8,7 @@ pytz==2023.3
 requests==2.32.4
 selenium==4.14.0
 tqdm==4.66.3
-urllib3==2.6.0
+urllib3==2.6.3
 webdriver-manager==4.0.1
 pymongo==4.6.3
 requests==2.32.4
